@@ -7,4 +7,4 @@ Yunpeng Mei, Jian Sun, Zhihong Peng,  Fang Deng, Gang Wang, Jie Chen
 
 This work was submitted to **IEEE Trans. Multimedia** in August 2024 and is currently under review.
 
-Paper(available soon) | [Video](https://www.youtube.com/playlist?list=PL7et4nGJAImLGytsJbglGbXl1hacA2dy)
+Paper(available soon) | [Video](https://www.youtube.com/playlist?list=PL7et4nGJAImLGytsJbglGbXl1hacA2dy_)
