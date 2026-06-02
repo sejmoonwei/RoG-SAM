@@ -22,6 +22,7 @@ from monai.losses import DiceCELoss
 from monai.transforms import AsDiscrete
 from PIL import Image
 from skimage import io
+from skimage.filters import gaussian
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
 from tensorboardX import SummaryWriter
 #from dataset import *
@@ -265,7 +266,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                 
             # Resize to the ordered output size
             pred = F.interpolate(pred,size=(args.out_size,args.out_size))
-            if args.dataset == 'Cornell' or args.dataset == 'Jacquard' or args.dataset == 'Graspnet':
+            if args.dataset in ('Cornell', 'OCID'):
                 pred_able = pred[:,:1,:,:]  #4,1,512,512
                 pred_angle = pred[:,1:-1,:,:]  #4,120,512,512
                 pred_width =pred[:,-1:,:,:]  #4,1,512,512
@@ -281,24 +282,12 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                         total = target.numel()
                         ratio = (total - pos) / max(pos, 1)
                         return min(ratio,2)  # 防止除以零
-                elif args.dataset == 'Jacquard' :
+                elif args.dataset == 'OCID':
                     def calculate_pos_weight(target):
                         pos = target.sum()
                         total = target.numel()
                         ratio = (total - pos) / max(pos, 1)
-                        return min(ratio,4)  # 防止除以零
-                elif args.dataset == 'OCID' or args.dataset == 'Graspnet':
-                    def calculate_pos_weight(target):
-                        pos = target.sum()
-                        total = target.numel()
-                        ratio = (total - pos) / max(pos, 1)
-                        return min(ratio, 16)  # 防止除以零 16 to 32 for graspnet realsense
-                elif args.dataset == 'Mixreal':
-                    def calculate_pos_weight(target):
-                        pos = target.sum()
-                        total = target.numel()
-                        ratio = (total - pos) / max(pos, 1)
-                        return min(ratio,10)  # 防止除以零
+                        return min(ratio, 16)  # 防止除以零
 
 
                 pos_weight_able = torch.tensor([calculate_pos_weight(able_target)], dtype=torch.float32).to(GPUdevice)
@@ -360,219 +349,163 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
 
     return loss
 
-def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
-     # eval mode
-    net.eval()
-
-    mask_type = torch.float32
-    n_val = len(val_loader)  # the number of batch
-    ave_res, mix_res = (0,0,0,0), (0,)*args.multimask_output*2
-    rater_res = [(0,0,0,0) for _ in range(6)]
-    tot = 0
-    hard = 0
-    threshold = (0.1, 0.3, 0.5, 0.7, 0.9)
-    GPUdevice = torch.device('cuda:' + str(args.gpu_device))
-    device = GPUdevice
-
-    if args.thd:
-        lossfunc = DiceCELoss(sigmoid=True, squared_pred=True, reduction='mean')
+def _get_grasp_evaluation(dataset_name):
+    if dataset_name == 'Cornell':
+        from util.data.evaluation import evaluation
+    elif dataset_name == 'OCID':
+        from util.data.evaluation_OCID import evaluation
     else:
-        lossfunc = criterion_G
-
-    with tqdm(total=n_val, desc='Validation round', unit='batch', leave=False) as pbar:
-        for ind, pack in enumerate(val_loader):
-            imgsw = pack['image'].to(dtype = torch.float32, device = GPUdevice)
-            masksw = pack['label'].to(dtype = torch.float32, device = GPUdevice)
-            # for k,v in pack['image_meta_dict'].items():
-            #     print(k)
-            if 'pt' not in pack or args.thd:
-                imgsw, ptw, masksw = generate_click_prompt(imgsw, masksw)
-            else:
-                ptw = pack['pt']
-                point_labels = pack['p_label']
-
-            if 'box' in pack and 'box' in args.prompt:
-                box = pack['box']
-                combined_box = torch.stack(box,dim=0).to(dtype = torch.float32, device = GPUdevice)
-                combined_box = combined_box[:,None,:]
-            else:
-                combined_box = None
-            name = pack['image_meta_dict']['filename_or_obj']
-            
-            buoy = 0
-            if args.evl_chunk:
-                evl_ch = int(args.evl_chunk)
-            else:
-                evl_ch = int(imgsw.size(-1))
-
-            while (buoy + evl_ch) <= imgsw.size(-1):
-                if args.thd:
-                    pt = ptw[:,:,buoy: buoy + evl_ch]
-                else:
-                    pt = ptw
-
-                imgs = imgsw[...,buoy:buoy + evl_ch]
-                masks = masksw[...,buoy:buoy + evl_ch]
-                buoy += evl_ch
-
-                if args.thd:
-                    pt = rearrange(pt, 'b n d -> (b d) n')
-                    imgs = rearrange(imgs, 'b c h w d -> (b d) c h w ')
-                    masks = rearrange(masks, 'b c h w d -> (b d) c h w ')
-                    imgs = imgs.repeat(1,3,1,1)
-                    point_labels = torch.ones(imgs.size(0))
-
-                    imgs = torchvision.transforms.Resize((args.image_size,args.image_size))(imgs)
-                    masks = torchvision.transforms.Resize((args.out_size,args.out_size))(masks)
-                
-                showp = pt
-
-                mask_type = torch.float32
-                ind += 1
-                b_size,c,w,h = imgs.size()
-                longsize = w if w >=h else h
-
-                # if point_labels.clone().flatten()[0] != -1:
-                if True:
-                    # point_coords = samtrans.ResizeLongestSide(longsize).apply_coords(pt, (h, w))
-                    point_coords = pt  # 390 339
-                    coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=GPUdevice)
-                    labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=GPUdevice)
-                    if (len(point_labels.shape) == 1):  # only one point prompt
-                        # coords_torch, labels_torch, showp = coords_torch[None, :, :], labels_torch[None, :], showp[None, :, :]
-                        coords_torch, labels_torch, showp = coords_torch[:, None, :], labels_torch[:, None], showp[:,
-                                                                                                             None, :]
-
-                    pt = (coords_torch, labels_torch)
-
-                '''init'''
-                if hard:
-                    true_mask_ave = (true_mask_ave > 0.5).float()
-                    #true_mask_ave = cons_tensor(true_mask_ave)
-                imgs = imgs.to(dtype = mask_type,device = GPUdevice)
-                
-                '''test'''
-                with torch.no_grad():
-                    imge= net.image_encoder(imgs)
-                    if args.net == 'sam' or args.net == 'mobile_sam':
-                        se, de = net.prompt_encoder(
-                            points=pt,
-                            boxes=combined_box,
-                            masks=None,
-                        )
-                    elif args.net == "efficient_sam":
-                        coords_torch,labels_torch = transform_prompt(coords_torch,labels_torch,h,w)
-                        se = net.prompt_encoder(
-                            coords=coords_torch,
-                            labels=labels_torch,
-                        )
-
-                    if args.net == 'sam':
-                        pred, _ = net.mask_decoder(
-                            image_embeddings=imge,
-                            image_pe=net.prompt_encoder.get_dense_pe(), 
-                            sparse_prompt_embeddings=se,
-                            dense_prompt_embeddings=de, 
-                            multimask_output=(args.multimask_output > 1),
-                        )
-                    elif args.net == 'mobile_sam':
-                        pred, _ = net.mask_decoder(
-                            image_embeddings=imge,
-                            image_pe=net.prompt_encoder.get_dense_pe(), 
-                            sparse_prompt_embeddings=se,
-                            dense_prompt_embeddings=de, 
-                            multimask_output=False,
-                        )
-                    elif args.net == "efficient_sam":
-                        se = se.view(
-                            se.shape[0],
-                            1,
-                            se.shape[1],
-                            se.shape[2],
-                        )
-                        pred, _ = net.mask_decoder(
-                            image_embeddings=imge,
-                            image_pe=net.prompt_encoder.get_dense_pe(), 
-                            sparse_prompt_embeddings=se,
-                            multimask_output=False,
-                        )
-
-                    # Resize to the ordered output size
-                    pred = F.interpolate(pred, size=(args.out_size, args.out_size))
-                    if args.dataset == 'Cornell' or args.dataset == 'Jacquard':
-                        pred_able = pred[:, :1, :, :]  # 4,1,512,512
-                        pred_angle = pred[:,1:-1,:,:]  #4,120,512,512
-                        pred_width =pred[:,-1:,:,:]  #4,1,512,512
-
-                        able_target = masks[:, :1, :, :]
-                        angle_target = masks[:,1:-1,:,:]
-                        width_target = masks[:,-1:,:,:]
-
-                        # 计算正类的权重，并确保计算不会因为除以零而出错
-                        # 计算正类的权重，并确保计算不会因为除以零而出错
-                        if args.dataset == 'Cornell':
-                            def calculate_pos_weight(target):
-                                pos = target.sum()
-                                total = target.numel()
-                                ratio = (total - pos) / max(pos, 1)
-                                return min(ratio, 2)  # 防止除以零
-                        elif args.dataset == 'Jacquard' or args.dataset == 'OCID':
-                            def calculate_pos_weight(target):
-                                pos = target.sum()
-                                total = target.numel()
-                                ratio = (total - pos) / max(pos, 1)
-                                return min(ratio, 4)  # 防止除以零
-
-                        pos_weight_able = torch.tensor([calculate_pos_weight(able_target)], dtype=torch.float32).to(GPUdevice)
-                        pos_weight_angle = torch.tensor([calculate_pos_weight(angle_target)], dtype=torch.float32).to(GPUdevice)
-                        pos_weight_width = torch.tensor([calculate_pos_weight(width_target)], dtype=torch.float32).to(GPUdevice)
-
-                        # 配置损失函数
-                        lossf_able = nn.BCEWithLogitsLoss(pos_weight=pos_weight_able)
-                        lossf_angle = nn.BCEWithLogitsLoss(pos_weight=pos_weight_angle)
-                        lossf_width = nn.BCEWithLogitsLoss(pos_weight=pos_weight_width)
-
-                        # 计算损失
-                        able_loss = lossf_able(pred_able.squeeze(), able_target.squeeze())
-                        angle_loss = lossf_angle(pred_angle.squeeze(), angle_target.squeeze())
-                        width_loss = lossf_width(pred_width.squeeze(), width_target.squeeze())
+        raise ValueError("RoG-SAM evaluation supports only 'Cornell' and 'OCID'.")
+    return evaluation
 
 
+def post_process_output(able_pred, angle_pred, width_pred):
+    able_pred = able_pred.squeeze().cpu().numpy()
+    able_pred = gaussian(able_pred, 1.0, preserve_range=True)
 
-                        loss = able_loss * 5 + angle_loss + width_loss
+    angle_pred = np.argmax(angle_pred.cpu().numpy().squeeze(), 0)
 
-                        # + angle_loss*0 + width_loss*0
-                        pbar.set_postfix(**{'loss (batch)': loss.item(),
-                                            'able_loss(batch)': able_loss.item() * 5,
-                                            # 'false_pos(batch)': false_pos.item(),
-                                            'angle_loss(batch)': angle_loss.item(),
-                                            'width_loss(batch)': width_loss.item()
-                                            })
+    width_pred = width_pred.squeeze().cpu().numpy() * 100.0
+    width_pred = gaussian(width_pred, 1.0, preserve_range=True)
 
-                    else:
-                        loss = lossfunc(pred, masks)  # pred 4,2,256,256   BCEWithLogit  *10
-                        pbar.set_postfix(**{'loss (batch)': loss.item()})
+    return able_pred, angle_pred, width_pred
 
-                    tot += loss.item()
 
-                    '''vis images'''
-                    if args.vis and ind % args.vis == 0:
-                        namecat = 'Test'
-                        for na in name[:2]:
-                            img_name = na.split('/')[-1].split('.')[0]
-                            namecat = namecat + img_name + '+'
-                        vis_image(imgs,pred, masks, os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '.jpg'), reverse=False, points=showp)
-                    
+def prepare_prompt(pt, point_labels, device):
+    point_coords = pt
+    coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=device)
+    labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=device)
 
-                    temp = eval_seg(pred, masks, threshold)  #pred 4,2, 256,256  mask 4,2,256,256  threshold [0.1,0.3,0.5 0.7 0.9]
-                    mix_res = tuple([sum(a) for a in zip(mix_res, temp)])
+    if labels_torch.clone().flatten()[0] == -1:
+        return None
 
-            pbar.update()
+    if len(labels_torch.shape) == 1:
+        coords_torch = coords_torch[:, None, :]
+        labels_torch = labels_torch[:, None]
 
-    if args.evl_chunk:
-        n_val = n_val * (imgsw.size(-1) // evl_ch)
+    return coords_torch, labels_torch
 
-    return tot/ n_val , tuple([a/n_val for a in mix_res])
+
+def prepare_box(box, device):
+    if box is None:
+        return None
+    combined_box = torch.stack(box, dim=0).to(dtype=torch.float32, device=device)
+    return combined_box[:, None, :]
+
+
+def compute_grasp_loss(net, xc, target, pt, combined_box, device, run_args):
+    able_target = target[:, 0, :, :].to(device)
+    angle_target = target[:, 1:-1, :, :].to(device)
+    width_target = target[:, -1, :, :].to(device)
+
+    imge = net.image_encoder(xc)
+    se, de = net.prompt_encoder(
+        points=pt,
+        boxes=combined_box,
+        masks=None,
+    )
+    pred, _ = net.mask_decoder(
+        image_embeddings=imge,
+        image_pe=net.prompt_encoder.get_dense_pe(),
+        sparse_prompt_embeddings=se,
+        dense_prompt_embeddings=de,
+        multimask_output=(run_args.multimask_output > 1),
+    )
+    pred = F.interpolate(pred, size=(run_args.out_size, run_args.out_size))
+
+    pred = pred.squeeze(0)
+    conf = pred[:1]
+    angle = pred[1:-1]
+    width = pred[-1:]
+
+    able_pred = torch.sigmoid(conf)
+    angle_pred = torch.sigmoid(angle)
+    width_pred = torch.sigmoid(width)
+
+    able_loss = F.binary_cross_entropy(able_pred.squeeze(), able_target.squeeze())
+    angle_loss = F.binary_cross_entropy(angle_pred.squeeze(), angle_target.squeeze())
+    width_loss = F.binary_cross_entropy(width_pred.squeeze(), width_target.squeeze())
+
+    return {
+        'loss': able_loss + angle_loss * 10 + width_loss,
+        'losses': {
+            'able_loss': able_loss,
+            'angle_loss': angle_loss * 10,
+            'width_loss': width_loss,
+        },
+        'pred': {
+            'able': able_pred,
+            'angle': angle_pred,
+            'width': width_pred,
+        },
+    }
+
+
+def validate(net, device, val_data, run_args):
+    net.eval()
+    evaluation = _get_grasp_evaluation(run_args.dataset)
+    results = {
+        'correct': 0,
+        'failed': 0,
+        'loss': 0,
+        'graspable': 0,
+        'Non': 0,
+        'fail': [],
+        'losses': {},
+    }
+
+    ld = len(val_data)
+    with torch.no_grad():
+        for batch_idx, pack in enumerate(tqdm(val_data, desc='Validating', unit='batch')):
+            x = pack['image']
+            y = pack['label']
+            pt = prepare_prompt(pack['pt'], pack['p_label'], device)
+            combined_box = prepare_box(pack.get('box'), device)
+
+            lossd = compute_grasp_loss(net, x.to(device), y.to(device), pt, combined_box, device, run_args)
+            loss = lossd['loss']
+            results['loss'] += loss.item() / ld
+            for ln, l in lossd['losses'].items():
+                if ln not in results['losses']:
+                    results['losses'][ln] = 0
+                results['losses'][ln] += l.item() / ld
+
+            able_out, angle_out, width_out = post_process_output(
+                lossd['pred']['able'],
+                lossd['pred']['angle'],
+                lossd['pred']['width'],
+            )
+            results['graspable'] += np.max(able_out) / ld
+
+            ret = evaluation(able_out, angle_out, width_out, y)
+            if ret is True:
+                results['correct'] += 1
+            elif ret is False:
+                results['failed'] += 1
+                results['fail'].append(batch_idx)
+            elif ret is None:
+                results['Non'] += 1
+
+    return results
+
+
+def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
+    device = torch.device('cuda', args.gpu_device)
+    train_val_results = validate(net, device, val_loader, args)
+
+    total = train_val_results['correct'] + train_val_results['failed']
+    accuracy = train_val_results['correct'] / total if total else 0.0
+    print('>>> train_graspable = {:.5f}'.format(train_val_results['graspable']))
+    print('>>> train_acc: %d/%d = %f' % (
+        train_val_results['correct'],
+        total,
+        accuracy,
+    ))
+    if train_val_results.get('Non'):
+        print('>>> ignored_none: {}'.format(train_val_results['Non']))
+
+    return accuracy
+
 
 def transform_prompt(coord,label,h,w):
     coord = coord.transpose(0,1)

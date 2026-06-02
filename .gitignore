@@ -49,7 +49,6 @@ composite.py
 function_Mixreal.py
 function_jacquard.py
 generate_obj_num.py
-inference.py
 interactive_mask_annotator.py
 pred_npy_graspnet.py
 precpt.py

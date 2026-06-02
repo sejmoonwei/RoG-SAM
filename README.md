@@ -12,13 +12,11 @@ Large assets, checkpoints, generated labels, logs, and unrelated experiment code
 ## Included Code
 
 - `train.py`: training and validation entry point for Cornell/OCID.
+- `accuracy.py`: unified Cornell/OCID evaluation entry point.
+- `inference.py`: unified Cornell/OCID single-image inference and visualization entry point.
 - `cfg.py`: command-line arguments.
-- `Cornell_inference.py`: Cornell inference example.
-- `OCID_inference.py`: OCID inference example.
-- `accracy.py`: Cornell evaluation script.
-- `OCID_accuracy.py`: OCID evaluation script.
 - `dataset/Cornell.py`, `dataset/OCID.py`: dataset loaders.
-- `function.py`, `function_cornell.py`, `function_OCID.py`: training and validation routines.
+- `function.py`: training, validation, and grasp evaluation routines.
 - `models/sam/`, `models/ImageEncoder/`, `models/common/`: SAM and adapter model code used by RoG-SAM.
 - `util/data/structure/`: grasp/image structures used by Cornell and OCID.
 
@@ -67,6 +65,71 @@ python train.py \
   -b 2
 ```
 
+## Evaluate
+
+Cornell:
+
+```bash
+python accuracy.py \
+  -net sam \
+  -mod sam_adpt \
+  -dataset Cornell \
+  -data_path /path/to/cornell_adapt \
+  -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth \
+  -pretrain /path/to/cornell_checkpoint.pth \
+  -image_size 512 \
+  -out_size 512 \
+  -b 1
+```
+
+OCID:
+
+```bash
+python accuracy.py \
+  -net sam \
+  -mod sam_adpt \
+  -dataset OCID \
+  -data_path /path/to/OCID_grasp \
+  -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth \
+  -pretrain /path/to/ocid_checkpoint.pth \
+  -image_size 512 \
+  -out_size 512 \
+  -b 1
+```
+
+## Inference
+
+Cornell:
+
+```bash
+python inference.py \
+  -net sam \
+  -dataset Cornell \
+  -image_path /path/to/pcd0148r.png \
+  -label_path /path/to/pcd0148grasp.mat \
+  -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth \
+  -pretrain /path/to/cornell_checkpoint.pth \
+  -image_size 512 \
+  -out_size 512 \
+  -output_dir outputs/cornell
+```
+
+OCID:
+
+```bash
+python inference.py \
+  -net sam \
+  -dataset OCID \
+  -image_path /path/to/rgb.png \
+  -label_path /path/to/annotation.txt \
+  -instance_mask_path /path/to/instance_mask.png \
+  -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth \
+  -pretrain /path/to/ocid_checkpoint.pth \
+  -image_size 512 \
+  -out_size 512 \
+  -output_dir outputs/ocid
+```
+
 ## Not Tracked
 
 The repository excludes:
@@ -77,7 +140,7 @@ The repository excludes:
 - `.npy`, `.zip`, `.pth`, `.pt`, `.ckpt`
 - unrelated datasets or experiments
 
-Some local inference scripts may still contain machine-specific example paths. Update those paths before running on a new machine.
+All public train/evaluate/inference entry points take paths from command-line arguments.
 
 ## License
 

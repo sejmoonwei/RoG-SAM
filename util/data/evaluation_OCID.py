@@ -231,5 +231,5 @@ def evaluation(able_out, angle_out, width_out, target, angle_k=120, eval_mode='p
 
 
 '''
-python OCID_accuracy.py -net sam -mod sam_adpt -exp_name jac15 -image_size 512 -out_size 256 -b 1 -dataset OCID  -gpu_device 2 -sam_ckpt ./checkpoint/sam/sam_vit_b_01ec64.pth -multimask 122 -prompt click box -data_path /data1/samgrasp/dataset/OCID/OCID_grasp
+python accuracy.py -net sam -mod sam_adpt -exp_name ocid_eval -image_size 512 -out_size 256 -b 1 -dataset OCID -gpu_device 0 -sam_ckpt ./checkpoint/sam/sam_vit_b_01ec64.pth -multimask 122 -prompt click box -data_path /path/to/OCID_grasp -pretrain /path/to/ocid_checkpoint.pth
 '''

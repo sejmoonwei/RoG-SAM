@@ -30,8 +30,6 @@ from tqdm import tqdm
 
 import cfg
 import function
-import function_cornell
-import function_OCID
 from conf import settings
 #from models.discriminatorlayer import discriminator
 from dataset import get_dataloader
@@ -48,8 +46,9 @@ net = get_network(args, args.net, use_gpu=args.gpu, gpu_device=GPUdevice, distri
 
 
 if args.pretrain:
-    weights = torch.load(args.pretrain)
-    net.load_state_dict(weights,strict=False)
+    checkpoint = torch.load(args.pretrain, map_location=GPUdevice)
+    weights = checkpoint.get('state_dict', checkpoint)
+    net.load_state_dict(weights, strict=False)
 
 optimizer = optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.6) #learning rate decay
@@ -101,10 +100,7 @@ best_dice = 0.0
 best_edice_disc = 0
 for epoch in range(settings.EPOCH):
     if epoch and epoch < 5:
-        if args.dataset == 'OCID':
-            accuracy = function_OCID.validation_sam(args, nice_test_loader, epoch, net, writer)
-        else:
-            accuracy = function_cornell.validation_sam(args, nice_test_loader, epoch, net, writer)
+        accuracy = function.validation_sam(args, nice_test_loader, epoch, net, writer)
         logger.info(f'Accuracy: {accuracy}|| @ epoch {epoch}.')
 
     net.train()
@@ -118,10 +114,7 @@ for epoch in range(settings.EPOCH):
 
     net.eval()
     if epoch and epoch % args.val_freq == 0 or epoch == settings.EPOCH-1:
-        if args.dataset == 'OCID':
-            accuracy = function_OCID.validation_sam(args, nice_test_loader, epoch, net, writer)
-        else:
-            accuracy = function_cornell.validation_sam(args, nice_test_loader, epoch, net, writer)
+        accuracy = function.validation_sam(args, nice_test_loader, epoch, net, writer)
         logger.info(f'Accuracy: {accuracy}|| @ epoch {epoch}.')
 
         if args.distributed != 'none':

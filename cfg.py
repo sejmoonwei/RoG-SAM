@@ -12,7 +12,7 @@ def parse_args():
     parser.add_argument('-type', type=str, default='map', help='condition type:ave,rand,rand_map')
     parser.add_argument('-vis', type=int, default=None, help='visualization')
     parser.add_argument('-reverse', type=bool, default=False, help='adversary reverse')
-    parser.add_argument('-pretrain', type=bool, default=False, help='adversary reverse')
+    parser.add_argument('-pretrain', type=str, default=None, help='pretrained RoG-SAM checkpoint path')
     parser.add_argument('-val_freq',type=int,default=5,help='interval between each validation')
     parser.add_argument('-gpu', type=bool, default=True, help='use gpu or not')
     parser.add_argument('-gpu_device', type=int, default=0, help='use which gpu')
@@ -47,6 +47,12 @@ def parse_args():
     parser.add_argument('-evl_chunk', type=int, default=None , help='evaluation chunk')
     parser.add_argument('-mid_dim', type=int, default=None , help='middle dim of adapter or the rank of lora matrix')
     parser.add_argument('-multimask_output', type=int, default=122 , help='number of grasp masks/classes')
+    parser.add_argument('-image_path', type=str, default=None, help='input image path for inference')
+    parser.add_argument('-label_path', type=str, default=None, help='Cornell grasp .mat or OCID annotation .txt path for inference')
+    parser.add_argument('-instance_mask_path', type=str, default=None, help='OCID instance mask path for inference')
+    parser.add_argument('-output_dir', type=str, default='outputs', help='directory for inference visualizations')
+    parser.add_argument('-crop_size', type=int, default=None, help='optional inference crop size')
+    parser.add_argument('-crop_dist', type=int, default=2, help='random crop offset range for inference')
 
     parser.add_argument(
     '-data_path',
