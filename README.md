@@ -1,48 +1,35 @@
 # RoG-SAM
 
-RoG-SAM adapts Segment Anything Model (SAM) style prompt-based segmentation for robotic grasp detection experiments. The codebase is based on Medical SAM Adapter and has been extended with grasp datasets, grasp heatmap prediction, inference scripts, and evaluation utilities.
+RoG-SAM adapts SAM-style prompt segmentation for robotic grasp detection on Cornell and OCID.
 
-## Supported Datasets
+This public repository intentionally contains only the training/inference code needed for:
 
-- Cornell
-- Jacquard
-- OCID
-- GraspNet
-- REAL
-- Mixreal
+- Cornell grasp dataset
+- OCID grasp dataset
 
-The original medical segmentation dataset loaders are still present in `dataset/`, but the current project focus is robotic grasping.
+Large assets, checkpoints, generated labels, logs, and unrelated experiment code are not tracked.
 
-## Main Entry Points
+## Included Code
 
-- `train.py`: train and validate SAM adapter models.
-- `cfg.py`: command-line arguments and defaults.
-- `Cornell_inference.py`, `Jacquard_inference.py`, `OCID_inference.py`, `Graspnet_inference.py`, `REAL_inference.py`: dataset-specific inference scripts.
-- `*_accuracy.py`: dataset-specific evaluation scripts.
-- `graspnet/`: GraspNet rectangle generation and evaluation helpers.
-- `util/data/structure/`: grasp and image structures used by inference and evaluation.
+- `train.py`: training and validation entry point for Cornell/OCID.
+- `cfg.py`: command-line arguments.
+- `Cornell_inference.py`: Cornell inference example.
+- `OCID_inference.py`: OCID inference example.
+- `accracy.py`: Cornell evaluation script.
+- `OCID_accuracy.py`: OCID evaluation script.
+- `dataset/Cornell.py`, `dataset/OCID.py`: dataset loaders.
+- `function.py`, `function_cornell.py`, `function_OCID.py`: training and validation routines.
+- `models/sam/`, `models/ImageEncoder/`, `models/common/`: SAM and adapter model code used by RoG-SAM.
+- `util/data/structure/`: grasp/image structures used by Cornell and OCID.
 
 ## Environment
-
-Create the Conda environment from:
 
 ```bash
 conda env create -f environment.yml
 conda activate sam_adapt
 ```
 
-There is also a `sam2_environment.yml` file kept for related experiments.
-
-## Checkpoints And Data
-
-Large files are intentionally not tracked in Git:
-
-- model checkpoints: `checkpoint/`
-- training logs: `logs/`, `runs/`
-- datasets and generated labels
-- `.pth`, `.pt`, `.npy`, `.zip`, and similar binary artifacts
-
-Download SAM checkpoints separately and place them under `checkpoint/sam/`, for example:
+Download SAM checkpoints separately and place them under `checkpoint/sam/`.
 
 ```bash
 mkdir -p checkpoint/sam
@@ -50,37 +37,48 @@ wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
 mv sam_vit_b_01ec64.pth checkpoint/sam/
 ```
 
-Some scripts currently contain local absolute paths such as `/data/myp/grasp_dataset` or `/data1/samgrasp/...`; update those paths for your machine before training or evaluation.
+## Train
 
-## Example Training
+Cornell:
 
 ```bash
 python train.py \
   -net sam \
   -mod sam_adpt \
   -dataset Cornell \
-  -data_path /path/to/cornell \
+  -data_path /path/to/cornell_adapt \
   -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth \
   -image_size 512 \
   -out_size 512 \
   -b 2
 ```
 
-For GraspNet, set the camera explicitly when needed:
+OCID:
 
 ```bash
 python train.py \
   -net sam \
   -mod sam_adpt \
-  -dataset Graspnet \
-  -camera realsense \
-  -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth
+  -dataset OCID \
+  -data_path /path/to/OCID_grasp \
+  -sam_ckpt checkpoint/sam/sam_vit_b_01ec64.pth \
+  -image_size 512 \
+  -out_size 512 \
+  -b 2
 ```
 
-## External Components
+## Not Tracked
 
-`Grounding_sam.py` depends on Grounded Segment Anything / GroundingDINO. That third-party directory and its large weights are not included in this repository; install or clone them separately if you need grounding-based prompts.
+The repository excludes:
+
+- checkpoints and pretrained weights
+- datasets
+- logs and generated outputs
+- `.npy`, `.zip`, `.pth`, `.pt`, `.ckpt`
+- unrelated datasets or experiments
+
+Some local inference scripts may still contain machine-specific example paths. Update those paths before running on a new machine.
 
 ## License
 
-This repository inherits the GPL license from the upstream Medical SAM Adapter codebase.
+This project inherits the GPL license from the upstream Medical SAM Adapter codebase.

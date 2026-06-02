@@ -8,7 +8,7 @@ def parse_args():
     parser.add_argument('-encoder', type=str, default='default', help='encoder type')
     parser.add_argument('-seg_net', type=str, default='transunet', help='net type')
     parser.add_argument('-mod', type=str, default='sam_adpt', help='mod type:seg,cls,val_ad')
-    parser.add_argument('-exp_name', default='msa_test_isic', type=str, help='net type')
+    parser.add_argument('-exp_name', default='rog_sam_cornell', type=str, help='experiment name')
     parser.add_argument('-type', type=str, default='map', help='condition type:ave,rand,rand_map')
     parser.add_argument('-vis', type=int, default=None, help='visualization')
     parser.add_argument('-reverse', type=bool, default=False, help='adversary reverse')
@@ -29,16 +29,14 @@ def parse_args():
     parser.add_argument('-b', type=int, default=2, help='batch size for dataloader')
     parser.add_argument('-s', type=bool, default=True, help='whether shuffle the dataset')
     parser.add_argument('-warm', type=int, default=1, help='warm up training phase')
-    parser.add_argument('-lr', type=float, default=1e-4, help='initial learning rate') #1e-4 to 2e-5 for graspnet
+    parser.add_argument('-lr', type=float, default=1e-4, help='initial learning rate')
     parser.add_argument('-uinch', type=int, default=1, help='input channel of unet')
     parser.add_argument('-imp_lr', type=float, default=3e-4, help='implicit learning rate')
     parser.add_argument('-weights', type=str, default = 0, help='the weights file you want to test')
     parser.add_argument('-base_weights', type=str, default = 0, help='the weights baseline')
     parser.add_argument('-sim_weights', type=str, default = 0, help='the weights sim')
     parser.add_argument('-distributed', default='none' ,type=str,help='multi GPU ids to use')
-    parser.add_argument('-dataset', default='isic' ,type=str,help='dataset name')
-    #/data1/samgrasp/dataset/REFUGE/REFUGE-Multirater/REFUGE-Multirater
-    #/data1/samgrasp/dataset/cornell_adapt
+    parser.add_argument('-dataset', default='Cornell' ,type=str,help='dataset name: Cornell or OCID')
     parser.add_argument('-sam_ckpt', default=None , help='sam checkpoint address')
     #./checkpoint/sam/sam_vit_b_01ec64.pth
     parser.add_argument('-thd', type=bool, default=False , help='3d or not')
@@ -48,16 +46,13 @@ def parse_args():
     parser.add_argument('-prompt', nargs='+', type=str, default=['click'] , help='Enter one or more valid options.')
     parser.add_argument('-evl_chunk', type=int, default=None , help='evaluation chunk')
     parser.add_argument('-mid_dim', type=int, default=None , help='middle dim of adapter or the rank of lora matrix')
-    parser.add_argument('-multimask_output', type=int, default=122 , help='the number of masks output for multi-class segmentation, set 2 for REFUGE dataset.')
-    parser.add_argument('-camera', type=str, default='realsense' , help='camera for graspnet')
+    parser.add_argument('-multimask_output', type=int, default=122 , help='number of grasp masks/classes')
 
     parser.add_argument(
     '-data_path',
     type=str,
     default='../data',
-    help='The path of segmentation data')
-    # '../dataset/RIGA/DiscRegion'
-    # '../dataset/ISIC'
+    help='The path of Cornell or OCID data')
     opt = parser.parse_args()
 
     return opt

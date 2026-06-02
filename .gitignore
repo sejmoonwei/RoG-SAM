@@ -9,6 +9,7 @@ build/
 .idea/
 .vscode/
 .DS_Store
+.github/
 
 # Training artifacts
 /checkpoint/
@@ -26,6 +27,78 @@ build/
 /Clutter-Grasp-Dataset-main/
 /Grounded_Segment_Anything/
 /graspnetAPI-1.2.11/build/
+/graspnetAPI-1.2.11/
+/graspnet/
+/figs/
+/guidance/
+/models/MobileSAMv2/
+/models/efficient_sam/
+/models/unet/
+/models/tag/
+
+# Non-public experiment scripts kept locally
+Graspnet_accuracy.py
+Graspnet_inference.py
+Grounding_sam.py
+Jacquard_accuracy.py
+Jacquard_inference.py
+REAL_camera_inference.py
+REAL_inference.py
+analyze_mask_pixels.py
+composite.py
+function_Mixreal.py
+function_jacquard.py
+generate_obj_num.py
+inference.py
+interactive_mask_annotator.py
+pred_npy_graspnet.py
+precpt.py
+quick_start.ipynb
+sam2_environment.yml
+split.py
+sync_and_clean.py
+val.py
+
+# Non-public dataset/model modules kept locally
+/dataset/Cornell_prompt.py
+/dataset/Graspnet.py
+/dataset/Jacquard.py
+/dataset/RandomDataset.py
+/dataset/atlas.py
+/dataset/brat.py
+/dataset/ddti.py
+/dataset/isic.py
+/dataset/kits.py
+/dataset/lidc.py
+/dataset/lnq.py
+/dataset/pendal.py
+/dataset/real.py
+/dataset/refuge.py
+/dataset/segrap.py
+/dataset/stare.py
+/dataset/toothfairy.py
+/dataset/wbc.py
+/models/efficientnet.py
+/models/implicitefficientnet.py
+/models/implicitnet.py
+/models/resnet.py
+/models/senet.py
+/models/squeezenet.py
+/models/types_.py
+/models/utils.py
+/models/vae.py
+/models/vgg.py
+/util/affga.py
+/util/data/evaluation_graspnet.py
+/util/data/evaluation_jacquard.py
+/util/data/structure/grasp_OCID_show.py
+/util/data/structure/grasp_graspnet.py
+/util/data/structure/grasp_graspnet_inf.py
+/util/data/structure/grasp_jacquard.py
+/util/data/structure/grasp_real.py
+/util/data/structure/img_graspnet.py
+/util/data/structure/img_jacquard.py
+/util/data/structure/img_real.py
 
 # Generated evaluation outputs
 evaluation_log_*.txt

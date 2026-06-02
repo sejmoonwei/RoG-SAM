@@ -94,25 +94,8 @@ def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
         else:
             net = sam_model_registry[args.encoder](args,checkpoint=args.sam_ckpt).to(device)
 
-    elif net == 'efficient_sam':
-        from models.efficient_sam import sam_model_registry
-        options = ['default','vit_s','vit_t']
-        if args.encoder not in options:
-            raise ValueError("Invalid encoder option. Please choose from: {}".format(options))
-        else:
-            net = sam_model_registry[args.encoder](args)
-
-    elif net == 'mobile_sam':
-        from models.MobileSAMv2.mobilesamv2 import sam_model_registry
-        options = ['default','vit_h','vit_l','vit_b','tiny_vit','efficientvit_l2','PromptGuidedDecoder','sam_vit_h']
-        if args.encoder not in options:
-            raise ValueError("Invalid encoder option. Please choose from: {}".format(options))
-        else:
-            net = sam_model_registry[args.encoder](args,checkpoint=args.sam_ckpt)
-
     else:
-        print('the network name you have entered is not supported yet')
-        sys.exit()
+        raise ValueError("RoG-SAM supports only '-net sam' in this repository.")
 
     if use_gpu:
         #net = net.cuda(device = gpu_device)

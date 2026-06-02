@@ -30,15 +30,17 @@ from tqdm import tqdm
 
 import cfg
 import function
-import function_jacquard
 import function_cornell
 import function_OCID
 from conf import settings
 #from models.discriminatorlayer import discriminator
-from dataset import *
+from dataset import get_dataloader
 from utils import *
-from dataset.RandomDataset import RandomDatasetSampler
 args = cfg.parse_args()
+
+SUPPORTED_DATASETS = {'Cornell', 'OCID'}
+if args.dataset not in SUPPORTED_DATASETS:
+    raise ValueError(f"RoG-SAM training supports only {sorted(SUPPORTED_DATASETS)} in this repository.")
 
 GPUdevice = torch.device('cuda', args.gpu_device)
 
@@ -74,22 +76,7 @@ args.path_helper = set_log_dir('logs', args.exp_name)
 logger = create_logger(args.path_helper['log_path'])
 logger.info(args)
 
-#------------------------------------------------------------#
-if args.dataset != 'Mixreal':
-    if args.dataset != 'Graspnet':
-        nice_train_loader, nice_test_loader = get_dataloader(args)
-    else:
-        nice_train_loader, nice_test_seen_loader, nice_test_similar_loader, nice_test_new_loader\
-            = get_dataloader(args)
-
-
-elif args.dataset == 'Mixreal':
-    (nice_train_dataset1, nice_train_dataset2, nice_train_dataset3, nice_train_dataset4,
-     nice_test_loader1, nice_test_loader2) \
-        = get_dataloader(args)
-    RandomRealDataset = RandomDatasetSampler(nice_train_dataset1, nice_train_dataset2, nice_train_dataset3, nice_train_dataset4, total_size = 3600)
-    nice_train_loader = DataLoader(RandomRealDataset, batch_size = args.b, shuffle = True)
-#---------------------------------------------------------------#
+nice_train_loader, nice_test_loader = get_dataloader(args)
 
 '''checkpoint path and tensorboard'''
 # iter_per_epoch = len(Glaucoma_training_loader)
@@ -114,45 +101,16 @@ best_dice = 0.0
 best_edice_disc = 0
 for epoch in range(settings.EPOCH):
     if epoch and epoch < 5:
-        if args.dataset != 'REFUGE':
-            if  args.dataset == 'OCID' :
-                accuracy = function_OCID.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy: {accuracy}|| @ epoch {epoch}.')
-            elif args.dataset == 'Graspnet':
-                accuracy_seen = function_OCID.validation_sam(args, nice_test_seen_loader, epoch, net, writer)
-                accuracy_similar = function_OCID.validation_sam(args, nice_test_similar_loader, epoch, net, writer)
-                accuracy_new = function_OCID.validation_sam(args, nice_test_new_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy_seen_similar_new:{accuracy_seen},{accuracy_similar},{accuracy_new}|| @ epoch {epoch}.')
-
-            elif args.dataset == 'Cornell' :
-                accuracy = function_cornell.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy: {accuracy}|| @ epoch {epoch}.')
-            elif args.dataset == 'Jacquard':
-                accuracy = function_jacquard.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy: {accuracy}|| @ epoch {epoch}.')
-            elif args.dataset == 'Mixreal':
-                accuracy1 = function_cornell.validation_sam(args, nice_test_loader1, epoch, net, writer)
-                accuracy2 = function_OCID.validation_sam(args, nice_test_loader2, epoch, net, writer)
-                logger.info(
-                    f'Accuracy cornell: {accuracy1}| Accuracy OCID: {accuracy2} || @ epoch {epoch}. ' )
-            else:
-                tol, (eiou, edice) = function.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(f'Total score: {tol}, IOU: {eiou}, DICE: {edice} || @ epoch {epoch}.')
+        if args.dataset == 'OCID':
+            accuracy = function_OCID.validation_sam(args, nice_test_loader, epoch, net, writer)
         else:
-            tol, (eiou_cup, eiou_disc, edice_cup, edice_disc) = function.validation_sam(args, nice_test_loader, epoch, net, writer)
-            logger.info(f'Total score: {tol}, IOU_CUP: {eiou_cup}, IOU_DISC: {eiou_disc}, DICE_CUP: {edice_cup}, DICE_DISC: {edice_disc} || @ epoch {epoch}.')
+            accuracy = function_cornell.validation_sam(args, nice_test_loader, epoch, net, writer)
+        logger.info(f'Accuracy: {accuracy}|| @ epoch {epoch}.')
 
     net.train()
     time_start = time.time()
     #-----------------------train-------------------------------#
-    if args.dataset != 'Mixreal':
-        loss = function.train_sam(args, net, optimizer, nice_train_loader, epoch, writer, vis=args.vis)
-    elif args.dataset == 'Mixreal':
-        loss = function.train_sam(args, net, optimizer, nice_train_loader, epoch, writer, vis=args.vis)
+    loss = function.train_sam(args, net, optimizer, nice_train_loader, epoch, writer, vis=args.vis)
     #------------------------------------------------------------#
     logger.info(f'Train loss: {loss} || @ epoch {epoch}.')
     time_end = time.time()
@@ -160,37 +118,11 @@ for epoch in range(settings.EPOCH):
 
     net.eval()
     if epoch and epoch % args.val_freq == 0 or epoch == settings.EPOCH-1:
-        if args.dataset != 'REFUGE':
-            if args.dataset == 'OCID' :
-                accuracy = function_OCID.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy: {accuracy}|| @ epoch {epoch}.')
-            elif args.dataset == 'Graspnet':
-                accuracy_seen = function_OCID.validation_sam(args, nice_test_seen_loader, epoch, net, writer)
-                accuracy_similar = function_OCID.validation_sam(args, nice_test_similar_loader, epoch, net, writer)
-                accuracy_new = function_OCID.validation_sam(args, nice_test_new_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy_seen_similar_new:{accuracy_seen},{accuracy_similar},{accuracy_new}|| @ epoch {epoch}.')
-            elif args.dataset == 'Cornell' :
-                accuracy = function_cornell.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy: {accuracy}|| @ epoch {epoch}.')
-
-            elif args.dataset == 'Jacquard':
-                accuracy = function_jacquard.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(
-                    f'Accuracy: {accuracy}|| @ epoch {epoch}.')
-            elif args.dataset == 'Mixreal':
-                accuracy1 = function_cornell.validation_sam(args, nice_test_loader1, epoch, net, writer)
-                accuracy2 = function_OCID.validation_sam(args, nice_test_loader2, epoch, net, writer)
-                logger.info(
-                    f'Accuracy cornell: {accuracy1}| Accuracy OCID: {accuracy2} || @ epoch {epoch}. ')
-            else:
-                tol, (eiou, edice) = function.validation_sam(args, nice_test_loader, epoch, net, writer)
-                logger.info(f'Total score: {tol}, IOU: {eiou}, DICE: {edice} || @ epoch {epoch}.')
+        if args.dataset == 'OCID':
+            accuracy = function_OCID.validation_sam(args, nice_test_loader, epoch, net, writer)
         else:
-            tol, (eiou_cup, eiou_disc, edice_cup, edice_disc) = function.validation_sam(args, nice_test_loader, epoch, net, writer)
-            logger.info(f'Total score: {tol}, IOU_CUP: {eiou_cup}, IOU_DISC: {eiou_disc}, DICE_CUP: {edice_cup}, DICE_DISC: {edice_disc} || @ epoch {epoch}.')
+            accuracy = function_cornell.validation_sam(args, nice_test_loader, epoch, net, writer)
+        logger.info(f'Accuracy: {accuracy}|| @ epoch {epoch}.')
 
         if args.distributed != 'none':
             sd = net.module.state_dict()
