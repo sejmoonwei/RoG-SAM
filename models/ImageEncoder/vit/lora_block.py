@@ -1,3 +1,4 @@
+# RoG-SAM integration: retained as model backbone code.
 from typing import Optional, Tuple, Type
 
 import torch

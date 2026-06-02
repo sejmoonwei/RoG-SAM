@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+# RoG-SAM integration: retained as model backbone code.
 from typing import Any, Optional, Tuple, Type
 
 import numpy as np

@@ -1,3 +1,4 @@
+# RoG-SAM integration: retained as model backbone code.
 from typing import Type
 
 from torch import nn

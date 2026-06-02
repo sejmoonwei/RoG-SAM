@@ -1,3 +1,4 @@
+# RoG-SAM integration: retained as model backbone code.
 import itertools
 
 import torch

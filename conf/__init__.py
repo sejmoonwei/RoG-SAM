@@ -1,3 +1,4 @@
+# RoG-SAM integration: retained as model backbone code.
 """ dynamically load settings
 
 author baiyu

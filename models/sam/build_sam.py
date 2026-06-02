@@ -1,11 +1,12 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-
-import urllib.request
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+
+# RoG-SAM integration: retained as model backbone code.
 from functools import partial
 from pathlib import Path
+import urllib.request
 
 import torch
 

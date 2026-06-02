@@ -30,7 +30,6 @@ from tqdm import tqdm
 
 import cfg
 import models.sam.utils.transforms as samtrans
-import pytorch_ssim
 from conf import settings
 from utils import *
 
