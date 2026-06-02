@@ -83,7 +83,7 @@ class Cornell(Dataset):
                 else:
                     self.images.append(os.path.join(self.data_path, filename))
 
-        #-----for cornell only-----#
+        # Cornell-specific label settings.
         self.output_size = 450  # fix 320
         self.angle_k =120
         #--------------------------#

@@ -38,7 +38,7 @@ args = cfg.parse_args()
 
 SUPPORTED_DATASETS = {'Cornell', 'OCID'}
 if args.dataset not in SUPPORTED_DATASETS:
-    raise ValueError(f"RoG-SAM training supports only {sorted(SUPPORTED_DATASETS)} in this repository.")
+    raise ValueError(f"Available training datasets: {sorted(SUPPORTED_DATASETS)}.")
 
 GPUdevice = torch.device('cuda', args.gpu_device)
 

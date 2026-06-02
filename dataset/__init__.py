@@ -33,7 +33,7 @@ def get_dataloader(args):
             data_path=args.data_path,
         )
     else:
-        raise ValueError("RoG-SAM supports only 'Cornell' and 'OCID' dataloaders.")
+        raise ValueError("Available dataloaders: 'Cornell' and 'OCID'.")
 
     train_loader = DataLoader(
         train_dataset,

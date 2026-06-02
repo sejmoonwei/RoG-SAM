@@ -36,7 +36,7 @@ build/
 /models/unet/
 /models/tag/
 
-# Non-public experiment scripts kept locally
+# Additional experiment scripts
 Graspnet_accuracy.py
 Graspnet_inference.py
 Grounding_sam.py
@@ -58,7 +58,7 @@ split.py
 sync_and_clean.py
 val.py
 
-# Non-public dataset/model modules kept locally
+# Additional dataset/model modules
 /dataset/Cornell_prompt.py
 /dataset/Graspnet.py
 /dataset/Jacquard.py
@@ -106,7 +106,7 @@ rawheatmap_*.png
 scene_*_mask.png
 scene_*_rgb_mask.png
 
-# Large binary artifacts
+# Model and data artifacts
 *.pth
 *.pt
 *.ckpt

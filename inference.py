@@ -28,7 +28,7 @@ def get_structure_classes(dataset_name):
         from util.data.structure.grasp_OCID import GraspMat
         from util.data.structure.img_OCID import Image
     else:
-        raise ValueError("RoG-SAM inference supports only 'Cornell' and 'OCID'.")
+        raise ValueError("Available inference datasets: 'Cornell' and 'OCID'.")
     return Image, GraspMat
 
 
@@ -161,7 +161,7 @@ def build_prompts(target, label, args, device):
 def main():
     args = cfg.parse_args()
     if args.dataset not in SUPPORTED_DATASETS:
-        raise ValueError(f"RoG-SAM inference supports only {sorted(SUPPORTED_DATASETS)}.")
+        raise ValueError(f"Available inference datasets: {sorted(SUPPORTED_DATASETS)}.")
     if not args.image_path:
         raise ValueError("Pass an input image with '-image_path /path/to/image.png'.")
     if not args.pretrain:

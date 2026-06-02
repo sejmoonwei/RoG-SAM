@@ -15,7 +15,7 @@ def load_checkpoint(net, checkpoint_path, device):
 def main():
     args = parse_args()
     if args.dataset not in SUPPORTED_DATASETS:
-        raise ValueError(f"RoG-SAM accuracy supports only {sorted(SUPPORTED_DATASETS)}.")
+        raise ValueError(f"Available accuracy datasets: {sorted(SUPPORTED_DATASETS)}.")
     if not args.pretrain:
         raise ValueError("Pass a trained checkpoint with '-pretrain /path/to/checkpoint.pth'.")
 

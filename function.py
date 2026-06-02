@@ -355,7 +355,7 @@ def _get_grasp_evaluation(dataset_name):
     elif dataset_name == 'OCID':
         from util.data.evaluation_OCID import evaluation
     else:
-        raise ValueError("RoG-SAM evaluation supports only 'Cornell' and 'OCID'.")
+        raise ValueError("Available evaluation datasets: 'Cornell' and 'OCID'.")
     return evaluation
 
 

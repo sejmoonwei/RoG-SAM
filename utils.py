@@ -95,7 +95,7 @@ def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
             net = sam_model_registry[args.encoder](args,checkpoint=args.sam_ckpt).to(device)
 
     else:
-        raise ValueError("RoG-SAM supports only '-net sam' in this repository.")
+        raise ValueError("Available network option: '-net sam'.")
 
     if use_gpu:
         #net = net.cuda(device = gpu_device)
