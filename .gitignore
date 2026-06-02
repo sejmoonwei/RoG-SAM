@@ -27,6 +27,13 @@ build/
 /Grounded_Segment_Anything/
 /graspnetAPI-1.2.11/build/
 
+# Generated evaluation outputs
+evaluation_log_*.txt
+results*.csv
+rawheatmap_*.png
+scene_*_mask.png
+scene_*_rgb_mask.png
+
 # Large binary artifacts
 *.pth
 *.pt
