@@ -14,11 +14,7 @@ class Image:
     def __init__(self, file):
 
         img = cv2.imread(file)
-        # self.img = img
         self.img = self.preprocess_image(img)
-        # cv2.imshow('crop',self.img)
-        # cv2.waitKey(0)
-        # cv2.destroyALLWindows()
 
     def height(self):
         return self.img.shape[0]
@@ -79,9 +75,6 @@ class Image:
         """
         """
         self.img = mmcv.imrotate(self.img, rota, border_value=(0, 0, 0))
-        # cv2.imshow('crop',self.img)
-        # cv2.waitKey(0)
-        # cv2.destroyALLWindows()
 
 
     def flip(self, flip_direction='horizontal'):
@@ -101,8 +94,8 @@ class Image:
         rAve = cv2.mean(imgR)[0] + rHue
         aveGray = (int)(bAve + gAve + rAve) / 3
 
-        if bAve == 0:
-            pass
+        if bAve == 0 or gAve == 0 or rAve == 0:
+            return img
 
         bCoef = aveGray / bAve
         gCoef = aveGray / gAve
@@ -142,4 +135,3 @@ class Image:
     def nomalise(self):
         self.img = self.img.astype(np.float32) / 255.0
         self.img -= self.img.mean()
-

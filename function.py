@@ -108,14 +108,13 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
             b_size,c,w,h = imgs.size()
             longsize = w if w >=h else h
 
-            if True:
-                point_coords = pt
-                coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=GPUdevice)
-                labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=GPUdevice)
-                if(len(point_labels.shape)==1):
-                    coords_torch, labels_torch, showp = coords_torch[:, None, :], labels_torch[:, None], showp[:, None, :]
+            point_coords = pt
+            coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=GPUdevice)
+            labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=GPUdevice)
+            if len(point_labels.shape) == 1:
+                coords_torch, labels_torch, showp = coords_torch[:, None, :], labels_torch[:, None], showp[:, None, :]
 
-                pt = (coords_torch, labels_torch)
+            pt = (coords_torch, labels_torch)
 
             if hard:
                 true_mask_ave = (true_mask_ave > 0.5).float()

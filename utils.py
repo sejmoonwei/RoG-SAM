@@ -9,9 +9,6 @@ import math
 import os
 import pathlib
 import random
-import shutil
-import sys
-import tempfile
 import time
 import warnings
 from collections import OrderedDict
@@ -22,64 +19,31 @@ import dateutil.tz
 import matplotlib.pyplot as plt
 import numpy
 import numpy as np
-import PIL
 import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
-from monai.config import print_config
 from monai.data import (CacheDataset, ThreadDataLoader, decollate_batch,
                         load_decathlon_datalist, set_track_meta)
-from monai.inferers import sliding_window_inference
-from monai.losses import DiceCELoss
-from monai.metrics import DiceMetric
-from monai.networks.nets import SwinUNETR
 from monai.transforms import (AsDiscrete, Compose, CropForegroundd,
                               EnsureTyped, LoadImaged, Orientationd,
                               RandCropByPosNegLabeld, RandFlipd, RandRotate90d,
                               RandShiftIntensityd, ScaleIntensityRanged,
                               Spacingd)
-from PIL import Image, ImageColor, ImageDraw, ImageFont
-from torch import autograd
-from torch.autograd import Function, Variable
+from PIL import Image
+from torch.autograd import Function
 from torch.optim.lr_scheduler import _LRScheduler
-from torch.utils.data import DataLoader
-# from lucent.optvis.param.spatial import pixel_image, fft_image, init_image
-# from lucent.optvis.param.color import to_valid_rgb
-# from lucent.optvis import objectives, transform, param
-# from lucent.misc.io import show
-from torchvision.models import vgg19
-from tqdm import tqdm
 
 import cfg
-# from precpt import run_precpt
-from models.discriminator import Discriminator
 import cv2
-import math
 from skimage.draw import polygon
 from skimage.feature import peak_local_max
-import torch.nn.functional as F
-import numpy as np
-# from siren_pytorch import SirenNet, SirenWrapper
 
 args = cfg.parse_args()
 device = torch.device('cuda', args.gpu_device)
-
-'''preparation of domain loss'''
-# cnn = vgg19(pretrained=True).features.to(device).eval()
-# cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-# cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-
-# netD = Discriminator(1).to(device)
-# netD.apply(init_D)
-# beta1 = 0.5
-# dis_lr = 0.0002
-# optimizerD = optim.Adam(netD.parameters(), lr=dis_lr, betas=(beta1, 0.999))
-'''end'''
 
 def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
     """ return given network
@@ -98,7 +62,6 @@ def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
         raise ValueError("Available network option: '-net sam'.")
 
     if use_gpu:
-        #net = net.cuda(device = gpu_device)
         if distribution != 'none':
             net = torch.nn.DataParallel(net,device_ids=[int(id) for id in args.distributed.split(',')])
             net = net.to(device=gpu_device)
@@ -236,8 +199,6 @@ class WarmUpLR(_LRScheduler):
 
 def gram_matrix(input):
     a, b, c, d = input.size()  # a=batch size(=1)
-    # b=number of feature maps
-    # (c,d)=dimensions of a f. map (N=c*d)
 
     features = input.view(a * b, c * d)  # resise F_XL into \hat F_XL
 
@@ -269,7 +230,6 @@ def make_grid(
         warnings.warn(warning)
         value_range = kwargs["range"]
 
-    # if list of tensors, convert to a 4D mini-batch Tensor
     if isinstance(tensor, list):
         tensor = torch.stack(tensor, dim=0)
 
@@ -530,25 +490,20 @@ def to_valid_out(maps_f,img,seg): #multi-rater
         maps = torch.nn.Softmax(dim = 1)(maps)
         final_seg = torch.multiply(seg,maps).sum(dim = 1, keepdim = True)
         return torch.cat((img,final_seg),1)
-        # return torch.cat((img,maps),1)
     return inner
 
 def gene_out(maps_f,img): #pure seg
     def inner():
         maps = maps_f()
         maps = maps.to(device = img.device)
-        # maps = torch.nn.Sigmoid()(maps)
         return torch.cat((img,maps),1)
-        # return torch.cat((img,maps),1)
     return inner
 
 def raw_out(maps_f,img): #raw
     def inner():
         maps = maps_f()
         maps = maps.to(device = img.device)
-        # maps = torch.nn.Sigmoid()(maps)
         return maps
-        # return torch.cat((img,maps),1)
     return inner    
 
 
@@ -557,7 +512,6 @@ class CompositeActivation(torch.nn.Module):
     def forward(self, x):
         x = torch.atan(x)
         return torch.cat([x/0.67, (x*x)/0.6], 1)
-        # return x
 
 
 def cppn(args, size, img = None, seg = None, batch=None, num_output_channels=1, num_hidden_channels=128, num_layers=8,
@@ -602,281 +556,14 @@ def cppn(args, size, img = None, seg = None, batch=None, num_output_channels=1, 
     outimg = raw_out(lambda: net(input_tensor),img) if args.netype == 'raw' else to_valid_out(lambda: net(input_tensor),img,seg)
     return net.parameters(), outimg
 
-def get_siren(args):
-    wrapper = get_network(args, 'siren', use_gpu=args.gpu, gpu_device=torch.device('cuda', args.gpu_device), distribution = args.distributed)
-    '''load init weights'''
-    checkpoint = torch.load('./logs/siren_train_init_2022_08_19_21_00_16/Model/checkpoint_best.pth')
-    wrapper.load_state_dict(checkpoint['state_dict'],strict=False)
-    '''end'''
-
-    '''load prompt'''
-    checkpoint = torch.load('./logs/vae_standard_refuge1_2022_08_21_17_56_49/Model/checkpoint500')
-    vae = get_network(args, 'vae', use_gpu=args.gpu, gpu_device=torch.device('cuda', args.gpu_device), distribution = args.distributed)
-    vae.load_state_dict(checkpoint['state_dict'],strict=False)
-    '''end'''
-
-    return wrapper, vae
-
-
-def siren(args, wrapper, vae, img = None, seg = None, batch=None, num_output_channels=1, num_hidden_channels=128, num_layers=8,
-         activation_fn=CompositeActivation, normalize=False, device = "cuda:0"):
-    vae_img = torchvision.transforms.Resize(64)(img)
-    latent = vae.encoder(vae_img).view(-1).detach()
-    outimg = raw_out(lambda: wrapper(latent = latent),img) if args.netype == 'raw' else to_valid_out(lambda: wrapper(latent = latent),img,seg)
-    # img = torch.randn(1, 3, 256, 256)
-    # loss = wrapper(img)
-    # loss.backward()
-
-    # # after much training ...
-    # # simply invoke the wrapper without passing in anything
-
-    # pred_img = wrapper() # (1, 3, 256, 256)
-    return wrapper.parameters(), outimg
-        
-
-'''adversary'''
-def render_vis(
-    args,
-    model,
-    objective_f,
-    real_img,
-    param_f=None,
-    optimizer=None,
-    transforms=None,
-    thresholds=(256,),
-    verbose=True,
-    preprocess=True,
-    progress=True,
-    show_image=True,
-    save_image=False,
-    image_name=None,
-    show_inline=False,
-    fixed_image_size=None,
-    label = 1,
-    raw_img = None,
-    prompt = None
-):
-    if label == 1:
-        sign = 1
-    elif label == 0:
-        sign = -1
-    else:
-        print('label is wrong, label is',label)
-    if args.reverse:
-        sign = -sign
-    if args.multilayer:
-        sign = 1
-
-    '''prepare'''
-    now = datetime.now()
-    date_time = now.strftime("%m-%d-%Y, %H:%M:%S")
-
-    netD, optD = pre_d()
-    '''end'''
-
-    if param_f is None:
-        param_f = lambda: param.image(128)
-    # param_f is a function that should return two things
-    # params - parameters to update, which we pass to the optimizer
-    # image_f - a function that returns an image as a tensor
-    params, image_f = param_f()
-    
-    if optimizer is None:
-        optimizer = lambda params: torch.optim.Adam(params, lr=5e-1)
-    optimizer = optimizer(params)
-
-    if transforms is None:
-        transforms = []
-    transforms = transforms.copy()
-
-    # Upsample images smaller than 224
-    image_shape = image_f().shape
-
-    if fixed_image_size is not None:
-        new_size = fixed_image_size
-    elif image_shape[2] < 224 or image_shape[3] < 224:
-        new_size = 224
-    else:
-        new_size = None
-    if new_size:
-        transforms.append(
-            torch.nn.Upsample(size=new_size, mode="bilinear", align_corners=True)
-        )
-
-    transform_f = transform.compose(transforms)
-
-    hook = hook_model(model, image_f)
-    objective_f = objectives.as_objective(objective_f)
-
-    if verbose:
-        model(transform_f(image_f()))
-        print("Initial loss of ad: {:.3f}".format(objective_f(hook)))
-
-    images = []
-    try:
-        for i in tqdm(range(1, max(thresholds) + 1), disable=(not progress)):
-            optimizer.zero_grad()
-            try:
-                model(transform_f(image_f()))
-            except RuntimeError as ex:
-                if i == 1:
-                    # Only display the warning message
-                    # on the first iteration, no need to do that
-                    # every iteration
-                    warnings.warn(
-                        "Some layers could not be computed because the size of the "
-                        "image is not big enough. It is fine, as long as the non"
-                        "computed layers are not used in the objective function"
-                        f"(exception details: '{ex}')"
-                    )
-            if args.disc:
-                '''dom loss part'''
-                # content_img = raw_img
-                # style_img = raw_img
-                # precpt_loss = run_precpt(cnn, cnn_normalization_mean, cnn_normalization_std, content_img, style_img, transform_f(image_f()))
-                for p in netD.parameters():
-                    p.requires_grad = True
-                for _ in range(args.drec):
-                    netD.zero_grad()
-                    real = real_img
-                    fake = image_f()
-                    # for _ in range(6):
-                    #     errD, D_x, D_G_z1 = update_d(args, netD, optD, real, fake)
-
-                    # label = torch.full((args.b,), 1., dtype=torch.float, device=device)
-                    # label.fill_(1.)
-                    # output = netD(fake).view(-1)
-                    # errG = nn.BCELoss()(output, label)
-                    # D_G_z2 = output.mean().item()
-                    # dom_loss = err
-                    one = torch.tensor(1, dtype=torch.float)
-                    mone = one * -1
-                    one = one.cuda(args.gpu_device)
-                    mone = mone.cuda(args.gpu_device)
-
-                    d_loss_real = netD(real)
-                    d_loss_real = d_loss_real.mean()
-                    d_loss_real.backward(mone)
-
-                    d_loss_fake = netD(fake)
-                    d_loss_fake = d_loss_fake.mean()
-                    d_loss_fake.backward(one)
-
-                    # Train with gradient penalty
-                    gradient_penalty = calculate_gradient_penalty(netD, real.data, fake.data)
-                    gradient_penalty.backward()
-
-
-                    d_loss = d_loss_fake - d_loss_real + gradient_penalty
-                    Wasserstein_D = d_loss_real - d_loss_fake
-                    optD.step()
-
-                # Generator update
-                for p in netD.parameters():
-                    p.requires_grad = False  # to avoid computation
-
-                fake_images = image_f()
-                g_loss = netD(fake_images)
-                g_loss = -g_loss.mean()
-                dom_loss = g_loss
-                g_cost = -g_loss
-
-                if i% 5 == 0:
-                    print(f' loss_fake: {d_loss_fake}, loss_real: {d_loss_real}')
-                    print(f'Generator g_loss: {g_loss}')
-                '''end'''
-
-
-
-            '''ssim loss'''
-
-            '''end'''
-
-            if args.disc:
-                loss = sign * objective_f(hook) + args.pw * dom_loss
-                # loss = args.pw * dom_loss
-            else:
-                loss = sign * objective_f(hook)
-                # loss = args.pw * dom_loss
-
-            loss.backward()
-
-            # #video the images
-            # if i % 5 == 0:
-            #     print('1')
-            #     image_name = image_name[0].split('\\')[-1].split('.')[0] + '_' + str(i) + '.png'
-            #     img_path = os.path.join(args.path_helper['sample_path'], str(image_name))
-            #     export(image_f(), img_path)
-            # #end
-            # if i % 50 == 0:
-            #     print('Loss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-            #       % (errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
-
-            optimizer.step()
-            if i in thresholds:
-                image = tensor_to_img_array(image_f())
-                # if verbose:
-                #     print("Loss at step {}: {:.3f}".format(i, objective_f(hook)))
-                if save_image:
-                    na = image_name[0].split('\\')[-1].split('.')[0] + '_' + str(i) + '.png'
-                    na = date_time + na
-                    outpath = args.quickcheck if args.quickcheck else args.path_helper['sample_path']
-                    img_path = os.path.join(outpath, str(na))
-                    export(image_f(), img_path)
-                
-                images.append(image)
-    except KeyboardInterrupt:
-        print("Interrupted optimization at step {:d}.".format(i))
-        if verbose:
-            print("Loss at step {}: {:.3f}".format(i, objective_f(hook)))
-        images.append(tensor_to_img_array(image_f()))
-
-    if save_image:
-        na = image_name[0].split('\\')[-1].split('.')[0] + '.png'
-        na = date_time + na
-        outpath = args.quickcheck if args.quickcheck else args.path_helper['sample_path']
-        img_path = os.path.join(outpath, str(na))
-        export(image_f(), img_path)
-    if show_inline:
-        show(tensor_to_img_array(image_f()))
-    elif show_image:
-        view(image_f())
-    return image_f()
-
-
 def tensor_to_img_array(tensor):
     image = tensor.cpu().detach().numpy()
     image = np.transpose(image, [0, 2, 3, 1])
     return image
 
 
-def view(tensor):
-    image = tensor_to_img_array(tensor)
-    assert len(image.shape) in [
-        3,
-        4,
-    ], "Image should have 3 or 4 dimensions, invalid image shape {}".format(image.shape)
-    # Change dtype for PIL.Image
-    image = (image * 255).astype(np.uint8)
-    if len(image.shape) == 4:
-        image = np.concatenate(image, axis=1)
-    Image.fromarray(image).show()
-
-
 def export(tensor, img_path=None):
-    # image_name = image_name or "image.jpg"
     c = tensor.size(1)
-    # if c == 7:
-    #     for i in range(c):
-    #         w_map = tensor[:,i,:,:].unsqueeze(1)
-    #         w_map = tensor_to_img_array(w_map).squeeze()
-    #         w_map = (w_map * 255).astype(np.uint8)
-    #         image_name = image_name[0].split('/')[-1].split('.')[0] + str(i)+ '.png'
-    #         wheat = sns.heatmap(w_map,cmap='coolwarm')
-    #         figure = wheat.get_figure()    
-    #         figure.savefig ('./fft_maps/weightheatmap/'+str(image_name), dpi=400)
-    #         figure = 0
-    # else:
     if c == 3:
         vutils.save_image(tensor, fp = img_path)
     else:
@@ -884,7 +571,6 @@ def export(tensor, img_path=None):
         w_map = tensor[:,-1,:,:].unsqueeze(1)
         image = tensor_to_img_array(image)
         w_map = 1 - tensor_to_img_array(w_map).squeeze()
-        # w_map[w_map==1] = 0
         assert len(image.shape) in [
             3,
             4,
@@ -895,51 +581,6 @@ def export(tensor, img_path=None):
 
         Image.fromarray(w_map,'L').save(img_path)
 
-
-class ModuleHook:
-    def __init__(self, module):
-        self.hook = module.register_forward_hook(self.hook_fn)
-        self.module = None
-        self.features = None
-
-
-    def hook_fn(self, module, input, output):
-        self.module = module
-        self.features = output
-
-
-    def close(self):
-        self.hook.remove()
-
-
-def hook_model(model, image_f):
-    features = OrderedDict()
-    # recursive hooking function
-    def hook_layers(net, prefix=None):
-        if prefix is None:
-            prefix = []
-        if hasattr(net, "_modules"):
-            for name, layer in net._modules.items():
-                if layer is None:
-                    # e.g. GoogLeNet's aux1 and aux2 layers
-                    continue
-                features["_".join(prefix + [name])] = ModuleHook(layer)
-                hook_layers(layer, prefix=prefix + [name])
-
-    hook_layers(model)
-
-    def hook(layer):
-        if layer == "input":
-            out = image_f()
-        elif layer == "labels":
-            out = list(features.values())[-1].features
-        else:
-            assert layer in features, f"Invalid layer {layer}. Retrieve the list of layers with `lucent.modelzoo.util.get_model_layers(model)`."
-            out = features[layer].features
-        assert out is not None, "There are no saved feature maps. Make sure to put the model in eval mode, like so: `model.to(device).eval()`. See README for example."
-        return out
-
-    return hook
 
 def vis_image(imgs, pred_masks, gt_masks, save_path, reverse = False, points = None):
     
@@ -982,13 +623,11 @@ def vis_image(imgs, pred_masks, gt_masks, save_path, reverse = False, points = N
                     ps = np.round(points.cpu()/args.roi_size * args.out_size).to(dtype = torch.int)
                 else:
                     ps = np.round(points.cpu()/args.image_size * args.out_size).to(dtype = torch.int)
-                # gt_masks[i,:,points[i,0]-5:points[i,0]+5,points[i,1]-5:points[i,1]+5] = torch.Tensor([255, 0, 0]).to(dtype = torch.float32, device = torch.device('cuda:' + str(dev)))
                 for p in ps:
                     gt_masks[i,0,p[i,0]-5:p[i,0]+5,p[i,1]-5:p[i,1]+5] = 0.5
                     gt_masks[i,1,p[i,0]-5:p[i,0]+5,p[i,1]-5:p[i,1]+5] = 0.1
                     gt_masks[i,2,p[i,0]-5:p[i,0]+5,p[i,1]-5:p[i,1]+5] = 0.4
         tup = (imgs[:row_num,:,:,:],pred_masks[:row_num,:,:,:], gt_masks[:row_num,:,:,:])
-        # compose = torch.cat((imgs[:row_num,:,:,:],pred_disc[:row_num,:,:,:], pred_cup[:row_num,:,:,:], gt_disc[:row_num,:,:,:], gt_cup[:row_num,:,:,:]),0)
         compose = torch.cat(tup,0)
         vutils.save_image(compose, fp = save_path, nrow = row_num, padding = 10)
 
@@ -1058,79 +697,6 @@ def eval_seg(pred,true_mask_p,threshold):
             
         return eiou / len(threshold), edice / len(threshold)
 
-# @objectives.wrap_objective()
-def dot_compare(layer, batch=1, cossim_pow=0):
-  def inner(T):
-    dot = (T(layer)[batch] * T(layer)[0]).sum()
-    mag = torch.sqrt(torch.sum(T(layer)[0]**2))
-    cossim = dot/(1e-6 + mag)
-    return -dot * cossim ** cossim_pow
-  return inner
-
-def init_D(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-def pre_d():
-    netD = Discriminator(3).to(device)
-    # netD.apply(init_D)
-    beta1 = 0.5
-    dis_lr = 0.00002
-    optimizerD = optim.Adam(netD.parameters(), lr=dis_lr, betas=(beta1, 0.999))
-    return netD, optimizerD
-
-def update_d(args, netD, optimizerD, real, fake):
-    criterion = nn.BCELoss()
-
-    label = torch.full((args.b,), 1., dtype=torch.float, device=device)
-    output = netD(real).view(-1)
-    # Calculate loss on all-real batch
-    errD_real = criterion(output, label)
-    # Calculate gradients for D in backward pass
-    errD_real.backward()
-    D_x = output.mean().item()
-
-    label.fill_(0.)
-    # Classify all fake batch with D
-    output = netD(fake.detach()).view(-1)
-    # Calculate D's loss on the all-fake batch
-    errD_fake = criterion(output, label)
-    # Calculate the gradients for this batch, accumulated (summed) with previous gradients
-    errD_fake.backward()
-    D_G_z1 = output.mean().item()
-    # Compute error of D as sum over the fake and the real batches
-    errD = errD_real + errD_fake
-    # Update D
-    optimizerD.step()
-
-    return errD, D_x, D_G_z1
-
-def calculate_gradient_penalty(netD, real_images, fake_images):
-    eta = torch.FloatTensor(args.b,1,1,1).uniform_(0,1)
-    eta = eta.expand(args.b, real_images.size(1), real_images.size(2), real_images.size(3)).to(device = device)
-
-    interpolated = (eta * real_images + ((1 - eta) * fake_images)).to(device = device)
-
-    # define it to calculate gradient
-    interpolated = Variable(interpolated, requires_grad=True)
-
-    # calculate probability of interpolated examples
-    prob_interpolated = netD(interpolated)
-
-    # calculate gradients of probabilities with respect to examples
-    gradients = autograd.grad(outputs=prob_interpolated, inputs=interpolated,
-                            grad_outputs=torch.ones(
-                                prob_interpolated.size()).to(device = device),
-                            create_graph=True, retain_graph=True)[0]
-
-    grad_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * 10
-    return grad_penalty
-
-
 def random_click(mask, point_labels = 1):
     # check if all masks are black
     max_label = max(set(mask.flatten()))
@@ -1142,7 +708,6 @@ def random_click(mask, point_labels = 1):
 
 
 def generate_click_prompt(img, msk, pt_label = 1):
-    # return: prompt, prompt mask
     pt_list = []
     msk_list = []
     b, c, h, w, d = msk.size()
@@ -1154,16 +719,13 @@ def generate_click_prompt(img, msk, pt_label = 1):
             msk_s = msk[j,:,:,i]
             indices = torch.nonzero(msk_s)
             if indices.size(0) == 0:
-                # generate a random array between [0-h, 0-h]:
                 random_index = torch.randint(0, h, (2,)).to(device = msk.device)
                 new_s = msk_s
             else:
                 random_index = random.choice(indices)
                 label = msk_s[random_index[0], random_index[1]]
                 new_s = torch.zeros_like(msk_s)
-                # convert bool tensor to int
                 new_s = (msk_s == label).to(dtype = torch.float)
-                # new_s[msk_s == label] = 1
             pt_list_s.append(random_index)
             msk_list_s.append(new_s)
         pts = torch.stack(pt_list_s, dim=0)
@@ -1183,7 +745,6 @@ def random_box(multi_rater):
     max_value_position = torch.nonzero(max_value)
 
     if max_value_position.size(0) == 0:
-        print('no label 1')
         return 0,0,0,0
 
     x_coords = max_value_position[:, 0]
@@ -1281,7 +842,7 @@ def polygon_iou(polygon_1, polygon_2):
     try:
         r_max = max(rr1.max(), rr2.max()) + 1
         c_max = max(cc1.max(), cc2.max()) + 1
-    except:
+    except ValueError:
         return 0
 
     canvas = np.zeros((r_max, c_max))
@@ -1346,7 +907,6 @@ def get_grasp(able_out, angle_out, width_out, angle_k=120, angle_th=30, iou_th=0
         pred_pts = peak_local_max(able_out, min_distance=min_distance, threshold_abs=threshold_abs)
         if min_distance >= 30:
             break
-        print('threshold_abs={}, min_distance={}, local_maxima={}'.format(threshold_abs, min_distance, pred_pts.shape[0]))
     if desc != '1':
         return 0
 
@@ -1361,5 +921,4 @@ def get_grasp(able_out, angle_out, width_out, angle_k=120, angle_th=30, iou_th=0
         grasp.append(rect_pred)
 
 
-    # print('mon_pt={}, mon_angle={}'.format(mon_pt, mon_angle))
     return grasp

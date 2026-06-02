@@ -8,7 +8,6 @@ import numpy as np
 import cv2
 import math
 import scipy.io as scio
-# from mmcv.ops.roi_align import roi_align
 
 def calcAngle2(angle):
     """
@@ -257,8 +256,7 @@ class GraspMat:
                 angle_mat[angle1, row, col] = 1.
                 angle_mat[angle2, row, col] = 1.
             else:
-                print('mode error')
-                raise ValueError
+                raise ValueError(f'Invalid grasp mode: {mode}.')
 
         grasp_confidence = np.expand_dims(grasp_confidence, axis=0)
         grasp_width = np.expand_dims(grasp_width, axis=0)
@@ -267,7 +265,6 @@ class GraspMat:
         ret_mat[1:-1, :, :] = angle_mat
         ret_mat[-1, :, :] = grasp_width / 100. # 200 to 100  7.31
 
-        # print(np.unique(grasp_width))
 
         return ret_mat
 

@@ -80,7 +80,7 @@ def polygon_iou(polygon_1, polygon_2):
     try:
         r_max = max(rr1.max(), rr2.max()) + 1
         c_max = max(cc1.max(), cc2.max()) + 1
-    except:
+    except ValueError:
         return 0
 
     canvas = np.zeros((r_max, c_max))
@@ -146,7 +146,7 @@ def evaluation(able_out, angle_out, width_out, target, angle_k=120, eval_mode='p
         pred_pts = np.array([[row, col]])
 
     else:
-        raise Exception("Invalid evaluation mode. Choose from ['peak', 'all', 'max'].", eval_mode)
+        raise ValueError(f"Invalid evaluation mode: {eval_mode}. Choose from ['peak', 'all', 'max'].")
 
     if desc != '1':
         return 0
@@ -184,8 +184,6 @@ def evaluation(able_out, angle_out, width_out, target, angle_k=120, eval_mode='p
                     if iou >= iou_th:
                         return True
 
-    # print('mon_pt={}, mon_angle={}'.format(mon_pt, mon_angle))
     return False
-
 
 

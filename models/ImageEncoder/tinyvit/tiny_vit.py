@@ -248,7 +248,6 @@ class TinyViT(nn.Module):
                  ):
         super().__init__()
         self.img_size=img_size
-        #import pdb;pdb.set_trace()
         self.num_classes = num_classes
         self.depths = depths
         self.num_layers = len(depths)

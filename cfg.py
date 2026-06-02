@@ -38,7 +38,6 @@ def parse_args():
     parser.add_argument('-distributed', default='none' ,type=str,help='multi GPU ids to use')
     parser.add_argument('-dataset', default='Cornell' ,type=str,help='dataset name: Cornell or OCID')
     parser.add_argument('-sam_ckpt', default=None , help='sam checkpoint address')
-    #./checkpoint/sam/sam_vit_b_01ec64.pth
     parser.add_argument('-thd', type=bool, default=False , help='3d or not')
     parser.add_argument('-chunk', type=int, default=None , help='crop volume depth')
     parser.add_argument('-num_sample', type=int, default=4 , help='sample pos and neg')
@@ -62,5 +61,3 @@ def parse_args():
     opt = parser.parse_args()
 
     return opt
-
-# required=True, 

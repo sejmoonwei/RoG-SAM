@@ -9,7 +9,6 @@ import cv2
 import math
 import torch
 import scipy.io as scio
-# from mmcv.ops.roi_align import roi_align
 import random
 def calcAngle2(angle):
     """
@@ -212,7 +211,6 @@ def gen_mat(label_file):
                 boxes_list.append(points_list) #list [    [(),(),(),()]     ,    ]
                 points_list = []
 
-    # get pos, cls, nagle, width
     grasp_label = get_grasp(boxes_list)
 
 
@@ -229,9 +227,8 @@ def gen_mat(label_file):
         endy = min(512, col+size+1)
         label_mat[0,startx:endx,starty:endy] = 1
 
-        label_mat[1, startx:endx, starty:endy] = 3. # class
-        # label_mat[1, row, col] = 3.
-        theta = float(label[2])  #
+        label_mat[1, startx:endx, starty:endy] = 3.
+        theta = float(label[2])
         angle = - theta / 180.0 * np.pi
         if angle < -3.14 or angle > 6.28:
             raise ValueError('invalid angle:{}'.format(angle))
@@ -243,55 +240,7 @@ def gen_mat(label_file):
 
         label_mat[2,startx:endx,starty:endy] = angle
 
-        # label_mat[2, row, col] = angle
         label_mat[3,startx:endx,starty:endy] = float(label[-1])
-    # 0:position 1:label 2:angle 3:w
-    #---------------vis------------------#
-    # png_file = label_file.replace('.txt','.png')
-    # png_file = png_file.replace('Annotations','rgb')
-    #
-    # im = cv2.imread(png_file)
-    # mask = torch.from_numpy(label_mat[0]==1)
-    # indices = torch.nonzero(mask, as_tuple=False)
-    # list_of_coord = [tuple(idx) for idx in indices ]
-    # n = 0
-    # for coord in list_of_coord:
-    #     n += 1
-    #     if True:
-    #         y,x = coord
-    #         x = int(x)
-    #         y = int(y)
-    #         w = float(label_mat[3][y,x]) # width
-    #         angle1 = label_mat[2][y,x]
-    #         if angle1 < 3.14:
-    #             angle2 = angle + 3.14
-    #         else:
-    #             angle2 = angle - 3.14
-    #         k = math.tan(angle1)
-    #
-    #         if k == 0:
-    #             dx = w
-    #             dy = 0
-    #         else:
-    #             dx = k / abs(k) * w / pow(k ** 2 + 1, 0.5)
-    #             dy = k * dx
-    #
-    #         if angle1 < math.pi:
-    #             cv2.line(im, (x, y), (int(x + dx), int(y - dy)), (0, 255, 0), 1)
-    #         else:
-    #             cv2.line(im, (x, y), (int(x - dx), int(y + dy)), (0, 255, 0), 1)
-    #
-    #         if angle2 < math.pi:
-    #             cv2.line(im, (x, y), (int(x + dx), int(y - dy)), (0, 255, 0), 1)
-    #         else:
-    #             cv2.line(im, (x, y), (int(x - dx), int(y + dy)), (0, 255, 0), 1)
-    #
-    #         cv2.circle(im, (x, y), 1, (255, 0, 0), 1)
-    #
-    # cv2.imshow('img',im)
-    # cv2.waitKey(0)
-    # cv2.destroyALLWindows()
-    # #-------------------vis---------------------------------#
     return label_mat
 
 
@@ -301,16 +250,14 @@ class GraspMat:
     """
     """
     def __init__(self, file, ins_mask_path, mode):
-        #(4,640,480)
-        grasp = gen_mat(file) #4,480,640
+        grasp = gen_mat(file)
         if mode == 'subset':
             instance_msk = cv2.imread(ins_mask_path, cv2.IMREAD_UNCHANGED)
-            ins_value = np.unique(instance_msk) #[0,1,2]
-            ins_value = [x for x in ins_value if x != 0]#[1,2]
+            ins_value = np.unique(instance_msk)
+            ins_value = [x for x in ins_value if x != 0]
             found_valid_grasp = False
             while not found_valid_grasp:
                 random_ins_value = random.choice(ins_value) #[2]
-                # random_ins_value = 10
                 positions = (instance_msk == random_ins_value) #480,640 array
                 expanded_position = np.expand_dims(positions,axis=0) #1,480,640
                 expanded_position = np.repeat(expanded_position, grasp.shape[0], axis=0) #4,480,640
@@ -455,8 +402,7 @@ class GraspMat:
                 angle_mat[angle1, row, col] = 1.
                 angle_mat[angle2, row, col] = 1.
             else:
-                print('mode error')
-                raise ValueError
+                raise ValueError(f'Invalid grasp mode: {mode}.')
 
         grasp_confidence = np.expand_dims(grasp_confidence, axis=0)
         grasp_width = np.expand_dims(grasp_width, axis=0)
@@ -465,7 +411,6 @@ class GraspMat:
         ret_mat[1:-1, :, :] = angle_mat
         ret_mat[-1, :, :] = grasp_width / 100. #200 to 100
 
-        # print(np.unique(grasp_width))
 
         return ret_mat
 

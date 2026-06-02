@@ -1,4 +1,4 @@
-#!/usr/bin/env	python3
+#!/usr/bin/env python3
 
 import os
 import time
@@ -82,18 +82,14 @@ for epoch in range(settings.EPOCH):
         else:
             sd = net.state_dict()
 
-        if True:
-            is_best = True
-
-            save_checkpoint({
+        is_best = True
+        save_checkpoint({
             'epoch': epoch + 1,
             'model': args.net,
             'state_dict': sd,
             'optimizer': optimizer.state_dict(),
             'path_helper': args.path_helper,
         }, is_best, args.path_helper['ckpt_path'], filename="best_dice_checkpoint.pth",epoch = epoch)
-            print("model saved")
-        else:
-            is_best = False
+        print("model saved")
 
 writer.close()
