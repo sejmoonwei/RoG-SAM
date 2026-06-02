@@ -8,12 +8,10 @@ Official implementation of:
 
 RoG-SAM adapts SAM-style prompt segmentation for robotic grasp detection on Cornell and OCID.
 
-This public repository intentionally contains only the training/inference code needed for:
+The current implementation supports:
 
 - Cornell grasp dataset
 - OCID grasp dataset
-
-Large assets, checkpoints, generated labels, logs, and unrelated experiment code are not tracked.
 
 ## Included Code
 
@@ -136,17 +134,9 @@ python inference.py \
   -output_dir outputs/ocid
 ```
 
-## Not Tracked
+## Data and Checkpoints
 
-The repository excludes:
-
-- checkpoints and pretrained weights
-- datasets
-- logs and generated outputs
-- `.npy`, `.zip`, `.pth`, `.pt`, `.ckpt`
-- unrelated datasets or experiments
-
-All public train/evaluate/inference entry points take paths from command-line arguments.
+Datasets and pretrained checkpoints should be downloaded separately. The train, evaluation, and inference entry points take data paths and checkpoint paths from command-line arguments.
 
 ## License
 
