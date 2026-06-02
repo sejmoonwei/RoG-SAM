@@ -56,11 +56,11 @@ class TwoWayTransformer(nn.Module):
         )
         self.norm_final_attn = nn.LayerNorm(embedding_dim)
 
-    def forward(
+    def forward( #src, position_src, tokens
         self,
-        image_embedding: Tensor,
-        image_pe: Tensor,
-        point_embedding: Tensor,
+        image_embedding: Tensor, # K
+        image_pe: Tensor, # K pe
+        point_embedding: Tensor, # Q
     ) -> Tuple[Tensor, Tensor]:
         """
         Args:

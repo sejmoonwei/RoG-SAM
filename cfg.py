@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('-b', type=int, default=2, help='batch size for dataloader')
     parser.add_argument('-s', type=bool, default=True, help='whether shuffle the dataset')
     parser.add_argument('-warm', type=int, default=1, help='warm up training phase')
-    parser.add_argument('-lr', type=float, default=1e-4, help='initial learning rate')
+    parser.add_argument('-lr', type=float, default=1e-4, help='initial learning rate') #1e-4 to 2e-5 for graspnet
     parser.add_argument('-uinch', type=int, default=1, help='input channel of unet')
     parser.add_argument('-imp_lr', type=float, default=3e-4, help='implicit learning rate')
     parser.add_argument('-weights', type=str, default = 0, help='the weights file you want to test')
@@ -37,14 +37,20 @@ def parse_args():
     parser.add_argument('-sim_weights', type=str, default = 0, help='the weights sim')
     parser.add_argument('-distributed', default='none' ,type=str,help='multi GPU ids to use')
     parser.add_argument('-dataset', default='isic' ,type=str,help='dataset name')
+    #/data1/samgrasp/dataset/REFUGE/REFUGE-Multirater/REFUGE-Multirater
+    #/data1/samgrasp/dataset/cornell_adapt
     parser.add_argument('-sam_ckpt', default=None , help='sam checkpoint address')
+    #./checkpoint/sam/sam_vit_b_01ec64.pth
     parser.add_argument('-thd', type=bool, default=False , help='3d or not')
     parser.add_argument('-chunk', type=int, default=None , help='crop volume depth')
     parser.add_argument('-num_sample', type=int, default=4 , help='sample pos and neg')
     parser.add_argument('-roi_size', type=int, default=96 , help='resolution of roi')
+    parser.add_argument('-prompt', nargs='+', type=str, default=['click'] , help='Enter one or more valid options.')
     parser.add_argument('-evl_chunk', type=int, default=None , help='evaluation chunk')
     parser.add_argument('-mid_dim', type=int, default=None , help='middle dim of adapter or the rank of lora matrix')
-    parser.add_argument('-multimask_output', type=int, default=1 , help='the number of masks output for multi-class segmentation, set 2 for REFUGE dataset.')
+    parser.add_argument('-multimask_output', type=int, default=122 , help='the number of masks output for multi-class segmentation, set 2 for REFUGE dataset.')
+    parser.add_argument('-camera', type=str, default='realsense' , help='camera for graspnet')
+
     parser.add_argument(
     '-data_path',
     type=str,

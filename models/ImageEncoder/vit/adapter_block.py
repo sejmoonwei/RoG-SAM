@@ -72,8 +72,8 @@ class AdapterBlock(nn.Module):
         shortcut = x
         # Window partition
         if self.window_size > 0:
-            H, W = x.shape[1], x.shape[2]
-            x, pad_hw = window_partition(x, self.window_size)
+            H, W = x.shape[1], x.shape[2] #32
+            x, pad_hw = window_partition(x, self.window_size) #x:4,32,32,768 to 36,14,14,768
 
          ## 3d branch
         if self.args.thd: 
@@ -92,7 +92,7 @@ class AdapterBlock(nn.Module):
 
         x = self.norm1(x)
         x = self.attn(x)
-        x = self.Space_Adapter(x)
+        x = self.Space_Adapter(x) #36,14,14,768 to 36,14,14,768
 
         if self.args.thd:
             xd = rearrange(xd, 'b (hh ww) c -> b  hh ww c', hh= hh )
@@ -100,11 +100,11 @@ class AdapterBlock(nn.Module):
 
         # Reverse window partition
         if self.window_size > 0:
-            x = window_unpartition(x, self.window_size, pad_hw, (H, W))
+            x = window_unpartition(x, self.window_size, pad_hw, (H, W)) #14 to 32
 
         x = shortcut + x
         xn = self.norm2(x)
-        x = x + self.mlp(xn) + self.scale * self.MLP_Adapter(xn)
+        x = x + self.mlp(xn) + self.scale * self.MLP_Adapter(xn) # 1,32,32,768 +  1,32,32,768
         return x
 
 

@@ -1,4 +1,40 @@
-/checkpoint
-/logs
-/runs
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Training artifacts
+/checkpoint/
+/logs/
+/runs/
+/outputs/
+/dataset/checkpoint/
+/dataset/logs/
+/dataset/runs/
+
+# Local datasets and generated labels
+/toy_photo/
+/png/
+/graspnet/rect_labels/
+/Clutter-Grasp-Dataset-main/
+/Grounded_Segment_Anything/
+/graspnetAPI-1.2.11/build/
+
+# Large binary artifacts
+*.pth
+*.pt
+*.ckpt
+*.npy
+*.npz
+*.zip
+*.tar.gz
+
+# Local scripts
 pipline.sh

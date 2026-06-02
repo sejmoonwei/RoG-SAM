@@ -119,7 +119,7 @@ class ImageEncoderViT(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
-        x = self.patch_embed(x)
+        x = self.patch_embed(x)  #4,3,512,512 to 4,32,32,768
         if self.pos_embed is not None:
             # resize position embedding to match the input
             new_abs_pos = F.interpolate(
@@ -128,12 +128,12 @@ class ImageEncoderViT(nn.Module):
                 mode="bicubic",
                 align_corners=False,
             ).permute(0, 2, 3, 1)
-            x = x + new_abs_pos
+            x = x + new_abs_pos #4,32,32,768
 
         for blk in self.blocks:
-            x = blk(x)
+            x = blk(x) #4,32,32,768 const
             
-        x = self.neck(x.permute(0, 3, 1, 2))
+        x = self.neck(x.permute(0, 3, 1, 2)) #4,256,32,32
 
         return x
 

@@ -59,6 +59,60 @@ global_step_best = 0
 epoch_loss_values = []
 metric_values = []
 
+def visualize_batch(pack):
+    # 从 pack 中获取数据
+    images = pack['image']  # (4, 3, 512, 512)
+    labels = pack['label']  # (4, 122, 256, 256)
+    pts = pack['pt']  # (4, 2) 每个图像一个点 (x, y)
+    boxes = pack['box']  # 每个元素是长度为 batch_size 的张量
+
+    batch_size = images.shape[0]
+
+    for i in range(batch_size):
+        image = images[i].numpy().transpose(1, 2, 0)  # 转换为 (512, 512, 3)
+        label = labels[i, 0].numpy()  # 获取第一个通道 (256, 256)
+        pt = pts[i].numpy()  # (2,)
+
+        # 处理每个box元素，将其转为numpy数组
+        box = np.array([boxes[0][i].item(), boxes[1][i].item(), boxes[2][i].item(), boxes[3][i].item()])
+
+        # 绘制第一组图像
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.imshow(image)
+        plt.scatter(pt[0], pt[1], color='red', s=50)  # 直接使用 pt 位置
+        plt.gca().add_patch(plt.Rectangle(
+            (box[0], box[1]),
+            box[2] - box[0],
+            box[3] - box[1],
+            linewidth=2, edgecolor='red', facecolor='none'))
+        plt.title(f'Image {i+1}')
+        plt.axis('off')
+
+        # 绘制第二组图像
+        plt.subplot(1, 2, 2)
+        label_resized = np.repeat(np.repeat(label, 2, axis=0), 2, axis=1)  # 将标签图像调整为 512x512
+        plt.imshow(label_resized, cmap='gray')
+        plt.scatter(pt[0], pt[1], color='red', s=50)  # 直接使用 pt 位置
+        plt.gca().add_patch(plt.Rectangle(
+            (box[0], box[1]),
+            box[2] - box[0],
+            box[3] - box[1],
+            linewidth=2, edgecolor='red', facecolor='none'))
+        plt.title(f'Label Channel 1 for Image {i+1}')
+        plt.axis('off')
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+
+
+
+
+
 def train_sam(args, net: nn.Module, optimizer, train_loader,
           epoch, writer, schedulers=None, vis = 50):
     hard = 0
@@ -79,6 +133,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
     with tqdm(total=len(train_loader), desc=f'Epoch {epoch}', unit='img') as pbar:
         for pack in train_loader:
             # torch.cuda.empty_cache()
+            # visualize_batch(pack)
             imgs = pack['image'].to(dtype = torch.float32, device = GPUdevice)
             masks = pack['label'].to(dtype = torch.float32, device = GPUdevice)
             # for k,v in pack['image_meta_dict'].items():
@@ -89,6 +144,15 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                 pt = pack['pt']
                 point_labels = pack['p_label']
             name = pack['image_meta_dict']['filename_or_obj']
+
+            if 'box' in pack and 'box' in args.prompt:
+                box = pack['box'] #list 4 each tensor 4
+                combined_box = torch.stack(box,dim=0).to(dtype = torch.float32, device = GPUdevice)
+                combined_box = combined_box[:,None,:] #4,1,4
+            else:
+                combined_box = None
+
+
 
             if args.thd:
                 imgs, pt, masks = generate_click_prompt(imgs, masks)
@@ -109,28 +173,31 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
             b_size,c,w,h = imgs.size()
             longsize = w if w >=h else h
 
-            if point_labels.clone().flatten()[0] != -1:
+            # if point_labels.clone().flatten()[0] != -1:
+            if True:
                     # point_coords = samtrans.ResizeLongestSide(longsize).apply_coords(pt, (h, w))
-                point_coords = pt
+                point_coords = pt #390 339
                 coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=GPUdevice)
                 labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=GPUdevice)
                 if(len(point_labels.shape)==1): # only one point prompt
-                    coords_torch, labels_torch, showp = coords_torch[None, :, :], labels_torch[None, :], showp[None, :, :]
+                    # coords_torch, labels_torch, showp = coords_torch[None, :, :], labels_torch[None, :], showp[None, :, :]
+                    coords_torch, labels_torch, showp = coords_torch[:, None, :], labels_torch[:, None], showp[:, None, :]
+
                 pt = (coords_torch, labels_torch)
 
             '''init'''
             if hard:
                 true_mask_ave = (true_mask_ave > 0.5).float()
-                #true_mask_ave = cons_tensor(true_mask_ave)
-            # imgs = imgs.to(dtype = mask_type,device = GPUdevice)
+
+
 
             '''Train'''
             if args.mod == 'sam_adpt':
                 for n, value in net.image_encoder.named_parameters(): 
                     if "Adapter" not in n:
-                        value.requires_grad = False
-                    else:
                         value.requires_grad = True
+                    else:
+                        value.requires_grad = False
             elif args.mod == 'sam_lora' or args.mod == 'sam_adalora':
                 from models.common import loralib as lora
                 lora.mark_only_lora_as_trainable(net.image_encoder)
@@ -141,18 +208,24 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                         init_warmup=500, final_warmup=1500, mask_interval=10, 
                         total_step=3000, beta1=0.85, beta2=0.85, 
                     )
-            else:
+            elif args.mod == 'sam':
                 for n, value in net.image_encoder.named_parameters(): 
                     value.requires_grad = True
+
+
+            # print('total_params:', sum(p.numel() for p in net.parameters()))
+            # print('total_trainable_params:', sum(p.numel() for p in net.parameters() if p.requires_grad))
                     
             imge= net.image_encoder(imgs)
             with torch.no_grad():
                 if args.net == 'sam' or args.net == 'mobile_sam':
                     se, de = net.prompt_encoder(
-                        points=pt,
-                        boxes=None,
+                        points=pt, #
+                        # points=None,
+                        boxes=combined_box,
                         masks=None,
                     )
+
                 elif args.net == "efficient_sam":
                     coords_torch,labels_torch = transform_prompt(coords_torch,labels_torch,h,w)
                     se = net.prompt_encoder(
@@ -192,10 +265,75 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                 
             # Resize to the ordered output size
             pred = F.interpolate(pred,size=(args.out_size,args.out_size))
+            if args.dataset == 'Cornell' or args.dataset == 'Jacquard' or args.dataset == 'Graspnet':
+                pred_able = pred[:,:1,:,:]  #4,1,512,512
+                pred_angle = pred[:,1:-1,:,:]  #4,120,512,512
+                pred_width =pred[:,-1:,:,:]  #4,1,512,512
 
-            loss = lossfunc(pred, masks)
+                able_target = masks[:,:1,:,:]
+                angle_target = masks[:,1:-1,:,:]
+                width_target = masks[:,-1:,:,:]
 
-            pbar.set_postfix(**{'loss (batch)': loss.item()})
+                # 计算正类的权重，并确保计算不会因为除以零而出错
+                if args.dataset == 'Cornell':
+                    def calculate_pos_weight(target):
+                        pos = target.sum()
+                        total = target.numel()
+                        ratio = (total - pos) / max(pos, 1)
+                        return min(ratio,2)  # 防止除以零
+                elif args.dataset == 'Jacquard' :
+                    def calculate_pos_weight(target):
+                        pos = target.sum()
+                        total = target.numel()
+                        ratio = (total - pos) / max(pos, 1)
+                        return min(ratio,4)  # 防止除以零
+                elif args.dataset == 'OCID' or args.dataset == 'Graspnet':
+                    def calculate_pos_weight(target):
+                        pos = target.sum()
+                        total = target.numel()
+                        ratio = (total - pos) / max(pos, 1)
+                        return min(ratio, 16)  # 防止除以零 16 to 32 for graspnet realsense
+                elif args.dataset == 'Mixreal':
+                    def calculate_pos_weight(target):
+                        pos = target.sum()
+                        total = target.numel()
+                        ratio = (total - pos) / max(pos, 1)
+                        return min(ratio,10)  # 防止除以零
+
+
+                pos_weight_able = torch.tensor([calculate_pos_weight(able_target)], dtype=torch.float32).to(GPUdevice)
+                pos_weight_angle = torch.tensor([calculate_pos_weight(angle_target)], dtype=torch.float32).to(GPUdevice)
+                pos_weight_width = torch.tensor([calculate_pos_weight(width_target)], dtype=torch.float32).to(GPUdevice)
+
+                # 配置损失函数
+                lossf_able = nn.BCEWithLogitsLoss(pos_weight=pos_weight_able)
+                lossf_angle = nn.BCEWithLogitsLoss(pos_weight=pos_weight_angle)
+                lossf_width = nn.BCEWithLogitsLoss(pos_weight=pos_weight_width)
+
+
+                # 计算损失
+                able_loss = lossf_able(pred_able.squeeze(), able_target.squeeze())
+                angle_loss = lossf_angle(pred_angle.squeeze(), angle_target.squeeze())
+                width_loss = lossf_width(pred_width.squeeze(), width_target.squeeze())
+
+
+
+                loss = able_loss * 5 + angle_loss + width_loss
+                # + angle_loss*0 + width_loss*0
+                pbar.set_postfix(**{'loss (batch)': loss.item(),
+                                    # 'angle_loss(batch)': angle_loss.item()
+                                    # 'false_pos(batch)': false_pos.item()
+                                    'able_loss(batch)': able_loss.item(),
+                                    'angle_loss(batch)': angle_loss.item(),
+                                    'width_loss(batch)': width_loss.item()
+                                    })
+
+            else:
+                loss = lossfunc(pred, masks)   #pred 4,2,256,256   BCEWithLogit  *10
+                pbar.set_postfix(**{'loss (batch)': loss.item()})
+
+            # loss = lossfunc(pred, masks)
+            # pbar.set_postfix(**{'loss (batch)': loss.item()})
             epoch_loss += loss.item()
 
             # nn.utils.clip_grad_value_(net.parameters(), 0.1)
@@ -215,6 +353,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                     namecat = 'Train'
                     for na in name[:2]:
                         namecat = namecat + na.split('/')[-1].split('.')[0] + '+'
+
                     vis_image(imgs,pred,masks, os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '.jpg'), reverse=False, points=showp)
 
             pbar.update()
@@ -251,6 +390,13 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
             else:
                 ptw = pack['pt']
                 point_labels = pack['p_label']
+
+            if 'box' in pack and 'box' in args.prompt:
+                box = pack['box']
+                combined_box = torch.stack(box,dim=0).to(dtype = torch.float32, device = GPUdevice)
+                combined_box = combined_box[:,None,:]
+            else:
+                combined_box = None
             name = pack['image_meta_dict']['filename_or_obj']
             
             buoy = 0
@@ -286,13 +432,17 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
                 b_size,c,w,h = imgs.size()
                 longsize = w if w >=h else h
 
-                if point_labels.clone().flatten()[0] != -1:
+                # if point_labels.clone().flatten()[0] != -1:
+                if True:
                     # point_coords = samtrans.ResizeLongestSide(longsize).apply_coords(pt, (h, w))
-                    point_coords = pt
+                    point_coords = pt  # 390 339
                     coords_torch = torch.as_tensor(point_coords, dtype=torch.float, device=GPUdevice)
                     labels_torch = torch.as_tensor(point_labels, dtype=torch.int, device=GPUdevice)
-                    if(len(point_labels.shape)==1): # only one point prompt
-                        coords_torch, labels_torch, showp = coords_torch[None, :, :], labels_torch[None, :], showp[None, :, :]
+                    if (len(point_labels.shape) == 1):  # only one point prompt
+                        # coords_torch, labels_torch, showp = coords_torch[None, :, :], labels_torch[None, :], showp[None, :, :]
+                        coords_torch, labels_torch, showp = coords_torch[:, None, :], labels_torch[:, None], showp[:,
+                                                                                                             None, :]
+
                     pt = (coords_torch, labels_torch)
 
                 '''init'''
@@ -307,7 +457,7 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
                     if args.net == 'sam' or args.net == 'mobile_sam':
                         se, de = net.prompt_encoder(
                             points=pt,
-                            boxes=None,
+                            boxes=combined_box,
                             masks=None,
                         )
                     elif args.net == "efficient_sam":
@@ -348,21 +498,73 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
                         )
 
                     # Resize to the ordered output size
-                    pred = F.interpolate(pred,size=(args.out_size,args.out_size))
-                    tot += lossfunc(pred, masks)
+                    pred = F.interpolate(pred, size=(args.out_size, args.out_size))
+                    if args.dataset == 'Cornell' or args.dataset == 'Jacquard':
+                        pred_able = pred[:, :1, :, :]  # 4,1,512,512
+                        pred_angle = pred[:,1:-1,:,:]  #4,120,512,512
+                        pred_width =pred[:,-1:,:,:]  #4,1,512,512
+
+                        able_target = masks[:, :1, :, :]
+                        angle_target = masks[:,1:-1,:,:]
+                        width_target = masks[:,-1:,:,:]
+
+                        # 计算正类的权重，并确保计算不会因为除以零而出错
+                        # 计算正类的权重，并确保计算不会因为除以零而出错
+                        if args.dataset == 'Cornell':
+                            def calculate_pos_weight(target):
+                                pos = target.sum()
+                                total = target.numel()
+                                ratio = (total - pos) / max(pos, 1)
+                                return min(ratio, 2)  # 防止除以零
+                        elif args.dataset == 'Jacquard' or args.dataset == 'OCID':
+                            def calculate_pos_weight(target):
+                                pos = target.sum()
+                                total = target.numel()
+                                ratio = (total - pos) / max(pos, 1)
+                                return min(ratio, 4)  # 防止除以零
+
+                        pos_weight_able = torch.tensor([calculate_pos_weight(able_target)], dtype=torch.float32).to(GPUdevice)
+                        pos_weight_angle = torch.tensor([calculate_pos_weight(angle_target)], dtype=torch.float32).to(GPUdevice)
+                        pos_weight_width = torch.tensor([calculate_pos_weight(width_target)], dtype=torch.float32).to(GPUdevice)
+
+                        # 配置损失函数
+                        lossf_able = nn.BCEWithLogitsLoss(pos_weight=pos_weight_able)
+                        lossf_angle = nn.BCEWithLogitsLoss(pos_weight=pos_weight_angle)
+                        lossf_width = nn.BCEWithLogitsLoss(pos_weight=pos_weight_width)
+
+                        # 计算损失
+                        able_loss = lossf_able(pred_able.squeeze(), able_target.squeeze())
+                        angle_loss = lossf_angle(pred_angle.squeeze(), angle_target.squeeze())
+                        width_loss = lossf_width(pred_width.squeeze(), width_target.squeeze())
+
+
+
+                        loss = able_loss * 5 + angle_loss + width_loss
+
+                        # + angle_loss*0 + width_loss*0
+                        pbar.set_postfix(**{'loss (batch)': loss.item(),
+                                            'able_loss(batch)': able_loss.item() * 5,
+                                            # 'false_pos(batch)': false_pos.item(),
+                                            'angle_loss(batch)': angle_loss.item(),
+                                            'width_loss(batch)': width_loss.item()
+                                            })
+
+                    else:
+                        loss = lossfunc(pred, masks)  # pred 4,2,256,256   BCEWithLogit  *10
+                        pbar.set_postfix(**{'loss (batch)': loss.item()})
+
+                    tot += loss.item()
 
                     '''vis images'''
-                    if ind % args.vis == 0:
+                    if args.vis and ind % args.vis == 0:
                         namecat = 'Test'
-                        for na in name[:2
-                        
-                        ]:
+                        for na in name[:2]:
                             img_name = na.split('/')[-1].split('.')[0]
                             namecat = namecat + img_name + '+'
                         vis_image(imgs,pred, masks, os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '.jpg'), reverse=False, points=showp)
                     
 
-                    temp = eval_seg(pred, masks, threshold)
+                    temp = eval_seg(pred, masks, threshold)  #pred 4,2, 256,256  mask 4,2,256,256  threshold [0.1,0.3,0.5 0.7 0.9]
                     mix_res = tuple([sum(a) for a in zip(mix_res, temp)])
 
             pbar.update()

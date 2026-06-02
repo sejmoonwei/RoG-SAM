@@ -10,14 +10,14 @@ class Adapter(nn.Module):
         self.act = act_layer()
         self.D_fc1 = nn.Linear(D_features, D_hidden_features)
         self.D_fc2 = nn.Linear(D_hidden_features, D_features)
-        
+
     def forward(self, x):
         # x is (BT, HW+1, D)
-        xs = self.D_fc1(x)
-        xs = self.act(xs)
-        xs = self.D_fc2(xs)
+        xs = self.D_fc1(x) #36,14,14,768  to  36,14,14,192
+        xs = self.act(xs) #
+        xs = self.D_fc2(xs) #36,14,14,192 to 36,14,14,768
         if self.skip_connect:
             x = x + xs
         else:
             x = xs
-        return x
+        return x #4,32,32,768

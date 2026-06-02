@@ -58,7 +58,12 @@ from tqdm import tqdm
 import cfg
 # from precpt import run_precpt
 from models.discriminator import Discriminator
-
+import cv2
+import math
+from skimage.draw import polygon
+from skimage.feature import peak_local_max
+import torch.nn.functional as F
+import numpy as np
 # from siren_pytorch import SirenNet, SirenWrapper
 
 args = cfg.parse_args()
@@ -411,10 +416,10 @@ def set_log_dir(root_dir, exp_name):
 
 
 def save_checkpoint(states, is_best, output_dir,
-                    filename='checkpoint.pth'):
+                    filename='checkpoint.pth', epoch = 0):
     torch.save(states, os.path.join(output_dir, filename))
     if is_best:
-        torch.save(states, os.path.join(output_dir, 'checkpoint_best.pth'))
+        torch.save(states, os.path.join(output_dir, 'checkpoint_best{}.pth'.format(epoch)))
 
 
 class RunningStats:
@@ -1015,8 +1020,8 @@ def eval_seg(pred,true_mask_p,threshold):
         iou_d, iou_c, disc_dice, cup_dice = 0,0,0,0
         for th in threshold:
 
-            gt_vmask_p = (true_mask_p > th).float()
-            vpred = (pred > th).float()
+            gt_vmask_p = (true_mask_p > th).float() #true_mask_p  4,2,256,256
+            vpred = (pred > th).float() #pred 4,2,256,256
             vpred_cpu = vpred.cpu()
             disc_pred = vpred_cpu[:,0,:,:].numpy().astype('int32')
             cup_pred = vpred_cpu[:,1,:,:].numpy().astype('int32')
@@ -1040,15 +1045,14 @@ def eval_seg(pred,true_mask_p,threshold):
             gt_vmask_p = (true_mask_p > th).float()
             vpred = (pred > th).float()
             vpred_cpu = vpred.cpu()
+            gt_vmask_p_cpu = gt_vmask_p.cpu()
             for i in range(0, c):
-                pred = vpred_cpu[:,i,:,:].numpy().astype('int32')
-                mask = gt_vmask_p[:,i,:,:].squeeze(1).cpu().numpy().astype('int32')
-        
-                '''iou for numpy'''
-                ious[i] += iou(pred,mask)
+                pred_i = vpred_cpu[:, i, :, :].numpy().astype('int32')  # 现在，转换成NumPy数组是安全的
+                mask_i = gt_vmask_p_cpu[:, i, :, :].squeeze(1).numpy().astype('int32')
 
-                '''dice for torch'''
-                dices[i] += dice_coeff(vpred[:,i,:,:], gt_vmask_p[:,i,:,:]).item()
+                # 计算 IOU 和 Dice
+                ious[i] += iou(pred_i, mask_i)
+                dices[i] += dice_coeff(vpred[:, i, :, :], gt_vmask_p[:, i, :, :]).item()
             
         return tuple(np.array(ious + dices) / len(threshold)) # tuple has a total number of c * 2
     else:
@@ -1194,6 +1198,10 @@ def random_box(multi_rater):
     max_value = torch.max(multi_rater[:,0,:,:], dim=0)[0]
     max_value_position = torch.nonzero(max_value)
 
+    if max_value_position.size(0) == 0:
+        print('no label 1')
+        return 0,0,0,0
+
     x_coords = max_value_position[:, 0]
     y_coords = max_value_position[:, 1]
 
@@ -1203,11 +1211,206 @@ def random_box(multi_rater):
     y_min = int(torch.min(y_coords))
     y_max = int(torch.max(y_coords))
 
+    offset = 2  # 10 for ori
 
-    x_min = random.choice(np.arange(x_min-10,x_min+11))
-    x_max = random.choice(np.arange(x_max-10,x_max+11))
-    y_min = random.choice(np.arange(y_min-10,y_min+11))
-    y_max = random.choice(np.arange(y_max-10,y_max+11))
+    x_min = random.choice(np.arange(x_min-offset,x_min+offset))
+    x_max = random.choice(np.arange(x_max-offset,x_max+offset))
+    y_min = random.choice(np.arange(y_min-offset,y_min+offset))
+    y_max = random.choice(np.arange(y_max-offset,y_max+offset))
 
     return x_min, x_max, y_min, y_max
 
+
+
+
+def length(pt1, pt2):
+    """
+    计算两点间的欧氏距离
+    :param pt1: [row, col]
+    :param pt2: [row, col]
+    :return:
+    """
+    return pow(pow(pt1[0] - pt2[0], 2) + pow(pt1[1] - pt2[1], 2), 0.5)
+
+
+def diff(k, label):
+    """
+    计算cls与label的差值
+    :param k: int 不大于label的长度
+    :param label: 一维数组 array (k, )  label为多标签的标注类别
+    :return: min_diff: 最小的差值 int    clss_list: 角度GT的类别 len=1/2/angle_k
+    """
+    clss = np.argwhere(label == 1)
+    clss = np.reshape(clss, newshape=(clss.shape[0],))
+    clss_list = list(clss)
+    min_diff = label.shape[0] + 1
+
+    for cls in clss_list:
+        min_diff = min(min_diff, abs(cls - k))
+
+    return min_diff, clss_list
+
+
+def arg_thresh(array, thresh):
+    """
+    获取array中大于thresh的二维索引
+    :param array: 二维array
+    :param thresh: float阈值
+    :return: array shape=(n, 2)
+    """
+    res = np.where(array > thresh)
+    rows = np.reshape(res[0], (-1, 1))
+    cols = np.reshape(res[1], (-1, 1))
+    locs = np.hstack((rows, cols))
+    for i in range(locs.shape[0]):
+        for j in range(locs.shape[0])[i+1:]:
+            if array[locs[i, 0], locs[i, 1]] < array[locs[j, 0], locs[j, 1]]:
+                locs[[i, j], :] = locs[[j, i], :]
+
+    return locs
+
+
+
+def rect_loc(row, col, angle, height, bottom):
+    """
+    计算矩形的四个角的坐标[row, col]
+    :param row:矩形中点 row
+    :param col:矩形中点 col
+    :param angle: 抓取角 弧度
+    :param height: 抓取宽度
+    :param bottom: 抓取器尺寸
+    :param angle_k: 抓取角分类数
+    :return:
+    """
+    xo = np.cos(angle)
+    yo = np.sin(angle)
+
+    y1 = row + height / 2 * yo
+    x1 = col - height / 2 * xo
+    y2 = row - height / 2 * yo
+    x2 = col + height / 2 * xo
+
+    return np.array(
+        [
+         [y1 - bottom/2 * xo, x1 - bottom/2 * yo],
+         [y2 - bottom/2 * xo, x2 - bottom/2 * yo],
+         [y2 + bottom/2 * xo, x2 + bottom/2 * yo],
+         [y1 + bottom/2 * xo, x1 + bottom/2 * yo],
+         ]
+    ).astype(np.int32)
+
+
+
+def polygon_iou(polygon_1, polygon_2):
+    """
+    计算两个多边形的IOU
+    :param polygon_1: [[row1, col1], [row2, col2], ...]
+    :param polygon_2: 同上
+    :return:
+    """
+    rr1, cc1 = polygon(polygon_2[:, 0], polygon_2[:, 1])
+    rr2, cc2 = polygon(polygon_1[:, 0], polygon_1[:, 1])
+
+    try:
+        r_max = max(rr1.max(), rr2.max()) + 1
+        c_max = max(cc1.max(), cc2.max()) + 1
+    except:
+        return 0
+
+    canvas = np.zeros((r_max, c_max))
+    canvas[rr1, cc1] += 1
+    canvas[rr2, cc2] += 1
+    union = np.sum(canvas > 0)
+    if union == 0:
+        return 0
+    intersection = np.sum(canvas == 2)
+    return intersection / union
+
+
+def calcAngle2(angle):
+    """
+    根据给定的angle计算与之反向的angle
+    :param angle: 弧度
+    :return: 弧度
+    """
+    return angle + math.pi - int((angle + math.pi) // (2 * math.pi)) * 2 * math.pi
+
+from skimage.filters import gaussian
+def post_process_output(able_pred, angle_pred, width_pred):
+    """
+    :param able_pred:  (1, 1, 320, 320)      (as torch Tensors)
+    :param angle_pred: (1, angle_k, 320, 320)     (as torch Tensors)
+    """
+
+    # 抓取置信度
+    able_pred = able_pred.squeeze().cpu().numpy()    # (320, 320)
+    able_pred = gaussian(able_pred, 1.0, preserve_range=True)
+
+    # 抓取角
+    angle_pred = np.argmax(angle_pred.cpu().numpy().squeeze(), 0)   # (320, 320)
+
+    # 抓取宽度
+    width_pred = width_pred.squeeze().cpu().numpy() * 70. + 30 # 100 to 150 # (320, 320) #200 for cornell  100 for jacquard  50 for OCID #graspnet *60 +30
+    width_pred = gaussian(width_pred, 1.0, preserve_range=True)
+
+    return able_pred, angle_pred, width_pred
+
+
+def get_grasp(able_out, angle_out, width_out, angle_k=120, angle_th=30, iou_th=0.25, bottom=30, desc='1'):
+    """
+    评估预测结果
+    :param able_out: 抓取置信度     (320, 320)
+    :param angle_out: 抓取角       (320, 320)
+    :param width_out: 抓取宽度      (320, 320)
+    :param target: (1, 2+angle_k, 320, 320)
+    :param angle_k: 抓取角分类数
+    :param eval_mode: 评估模式：'peak':只选取峰值进行评估；'all':所有超过阈值的都进行评估
+    :param angle_th: 角度 阈值
+    :param desc:
+    :return:
+    1、得到graspable最大的预测点p。
+    2、以p为中点，th为半径做圆，搜索圆内的label（th=30）
+    3、与任意一个label同时满足以下两个条件，认为预测正确：
+        1、偏转角小于30°（k<=3）
+        2、IOU>0.25
+    """
+    able_out, angle_out, width_out = post_process_output(
+        able_out, angle_out, width_out
+    )
+
+    rows = able_out.shape[0]    # 320
+    cols = able_out.shape[1]    # 320
+
+
+
+    # 搜索超过抓取置信度的待评估点
+    threshold_abs = 0.1 #  cornell 0.2
+    min_distance = 30 #cornell 20
+    pred_pts = peak_local_max(able_out, min_distance=min_distance, threshold_abs=threshold_abs, num_peaks=1)
+    while pred_pts.shape[0] > 50:
+        threshold_abs += 0.05
+        pred_pts = peak_local_max(able_out, min_distance=min_distance, threshold_abs=threshold_abs)
+        if threshold_abs >= 0.95:
+            break
+    while pred_pts.shape[0] > 50:
+        min_distance += 2
+        pred_pts = peak_local_max(able_out, min_distance=min_distance, threshold_abs=threshold_abs)
+        if min_distance >= 30:
+            break
+        print('threshold_abs={}, min_distance={}, 极大值数量={}'.format(threshold_abs, min_distance, pred_pts.shape[0]))
+    if desc != '1':
+        return 0
+
+    thresh = 30  # 搜索圆半径    50
+    grasp = []
+    for idx in range(pred_pts.shape[0]):
+        row_pred, col_pred = pred_pts[idx]
+        angle_pred_cls = angle_out[row_pred, col_pred]  # 预测的抓取角类别
+        width_pred = width_out[row_pred, col_pred]  # 预测的宽度
+        angle_pred = angle_pred_cls / angle_k * 2 * math.pi
+        rect_pred = rect_loc(row_pred, col_pred, angle_pred, width_pred, bottom)
+        grasp.append(rect_pred)
+
+
+    # print('mon_pt={}, mon_angle={}'.format(mon_pt, mon_angle))
+    return grasp
