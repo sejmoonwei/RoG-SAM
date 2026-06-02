@@ -1,4 +1,4 @@
-# RoG-SAM
+# RoG-SAM: A Language-Driven Framework for Instance-Level Robotic Grasping Detection
 
 Official implementation of:
 
