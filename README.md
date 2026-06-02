@@ -4,7 +4,7 @@ Official implementation of:
 
 **RoG-SAM: A Language-Driven Framework for Instance-Level Robotic Grasping Detection**
 
-Paper: [IEEE Xplore](https://ieeexplore.ieee.org/document/10948350) | DOI: [10.1109/TMM.2025.3557685](https://doi.org/10.1109/TMM.2025.3557685)
+[Paper](https://ieeexplore.ieee.org/document/10948350)
 
 RoG-SAM adapts SAM-style prompt segmentation for robotic grasp detection on Cornell and OCID.
 
