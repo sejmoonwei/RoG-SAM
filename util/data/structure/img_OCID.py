@@ -10,7 +10,6 @@ import numpy as np
 
 class Image:
     """
-    语义分割mask类，本项目中用于affordance分割
     """
     def __init__(self, file):
 
@@ -31,29 +30,24 @@ class Image:
         h, w = img.shape[:2]
         target_w, target_h = target_size
 
-        # 计算调整比例
         scale = min(target_w / w, target_h / h)
         new_w = int(w * scale)
         new_h = int(h * scale)
 
-        # 调整图像大小
         resized_img = cv2.resize(img, (new_w, new_h))
 
-        # 计算填充
         delta_w = target_w - new_w
         delta_h = target_h - new_h
         top, bottom = delta_h // 2, delta_h - (delta_h // 2)
         left, right = delta_w // 2, delta_w - (delta_w // 2)
 
-        # 填充图像
-        color = [0, 0, 0]  # 使用0值填充（黑色）
+        color = [0, 0, 0]
         padded_img = cv2.copyMakeBorder(resized_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
 
         return padded_img
 
     def crop(self, size, dist=-1):
         """
-        裁剪 self.grasp
 
         args:
             size: int
@@ -83,7 +77,6 @@ class Image:
 
     def rotate(self, rota):
         """
-        旋转 rota (弧度)
         """
         self.img = mmcv.imrotate(self.img, rota, border_value=(0, 0, 0))
         # cv2.imshow('crop',self.img)
@@ -99,13 +92,10 @@ class Image:
 
 
     def _Hue(self, img, bHue, gHue, rHue):
-        # 1.计算三通道灰度平均值
         imgB = img[:, :, 0]
         imgG = img[:, :, 1]
         imgR = img[:, :, 2]
 
-        # 下述3行代码控制白平衡或者冷暖色调，下例中增加了b的分量，会生成冷色调的图像，
-        # 如要实现白平衡，则把两个+10都去掉；如要生成暖色调，则增加r的分量即可。
         bAve = cv2.mean(imgB)[0] + bHue
         gAve = cv2.mean(imgG)[0] + gHue
         rAve = cv2.mean(imgR)[0] + rHue
@@ -114,12 +104,10 @@ class Image:
         if bAve == 0:
             pass
 
-        # 2计算每个通道的增益系数
         bCoef = aveGray / bAve
         gCoef = aveGray / gAve
         rCoef = aveGray / rAve
 
-        # 3使用增益系数
         imgB = np.expand_dims(np.floor((imgB * bCoef)), axis=2)
         imgG = np.expand_dims(np.floor((imgG * gCoef)), axis=2)
         imgR = np.expand_dims(np.floor((imgR * rCoef)), axis=2)
@@ -132,26 +120,20 @@ class Image:
 
     def color(self, hue=10):
         """
-        色调hue、亮度 增强
         """
 
-        # 调节色调
         hue = np.random.uniform(-1 * hue, hue)
 
         if hue == 0:
-            # 一般的概率保持原样 / 白平衡
             if np.random.rand() < 0.5:
-                # 白平衡
                 self.img = self._Hue(self.img, hue, hue, hue)
         else:
-            # 冷暖色调
             bHue = hue if hue > 0 else 0
             gHue = abs(hue)
             rHue = -1 * hue if hue < 0 else 0
             self.img = self._Hue(self.img, bHue, gHue, rHue)
 
 
-        # 调节亮度
         bright = np.random.uniform(-40, 10)
         imgZero = np.zeros(self.img.shape, self.img.dtype)
         self.img = cv2.addWeighted(self.img, 1, imgZero, 2, bright)

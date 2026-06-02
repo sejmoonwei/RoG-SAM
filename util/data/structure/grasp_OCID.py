@@ -13,32 +13,26 @@ import scipy.io as scio
 import random
 def calcAngle2(angle):
     """
-    根据给定的angle计算与之反向的angle
-    :param angle: 弧度
-    :return: 弧度
     """
     return angle + math.pi - int((angle + math.pi) // (2 * math.pi)) * 2 * math.pi
 
 def drawGrasp(img, label, offset, interval=20):
     """
-    绘制抓取标签
         label: (4, h, w)
         offset: (row, col)
     :return:
     """
 
-    grasp_confidence = label[0, :, :]   # 抓取置信度
-    grasp_mode = label[1, :, :]         # 抓取模式 0-无约束抓取 1-单向抓取 2-对称抓取
-    grasp_angle = label[2, :, :]        # 抓取角
-    grasp_width = label[3, :, :]        # 抓取宽度
+    grasp_confidence = label[0, :, :]
+    grasp_mode = label[1, :, :]
+    grasp_angle = label[2, :, :]
+    grasp_width = label[3, :, :]
 
-    # 绘制抓取点
     grasp_point_rows, grasp_point_cols = np.where(grasp_confidence > 0)
     grasp_point_rows = grasp_point_rows + offset[0]
     grasp_point_cols = grasp_point_cols + offset[1]
     img[grasp_point_rows, grasp_point_cols, :] = [0, 255, 0]
 
-    # 绘制抓取角和抓取宽度
     n = 0
     for i, _ in enumerate(grasp_point_rows):
         n += 1
@@ -46,15 +40,15 @@ def drawGrasp(img, label, offset, interval=20):
             continue
         row, col = grasp_point_rows[i] - offset[0], grasp_point_cols[i] - offset[1]
         width = grasp_width[row, col] * 150. / 2
-        angle = grasp_angle[row, col]   # 弧度
+        angle = grasp_angle[row, col]
         mode = grasp_mode[row, col]
 
         row, col = row + offset[0], col + offset[1]
 
-        if mode == 0.:      # 无约束抓取
+        if mode == 0.:
             cv2.circle(img, (col, row), int(width), (255, 245, 0), 1)
 
-        elif mode == 1.:    # 单向抓取
+        elif mode == 1.:
             k = math.tan(angle)
 
             if k == 0:
@@ -69,7 +63,7 @@ def drawGrasp(img, label, offset, interval=20):
             else:
                 cv2.line(img, (col, row), (int(col - dx), int(row + dy)), (255, 245, 0), 1)
 
-        elif mode == 2.:    # 对称抓取
+        elif mode == 2.:
             angle2 = calcAngle2(angle)
             k = math.tan(angle)
 
@@ -97,14 +91,13 @@ def drawGrasp(img, label, offset, interval=20):
 
 def drawGrasp1(img, grasp):
     """
-    绘制抓取标签
         grasp: [row, col, angle, width]
     :return:
     """
 
     row, col = int(grasp[0]), int(grasp[1])
     cv2.circle(img, (int(grasp[1]), int(grasp[0])), 2, (0, 255, 0), -1)
-    angle = grasp[2]   # 弧度
+    angle = grasp[2]
     width = grasp[3] / 2
 
     k = math.tan(angle)
@@ -169,7 +162,6 @@ def imrotate(img,
     rotated = cv2.warpAffine(img, matrix, (w, h), flags=flag, borderValue=border_value)
     return rotated
 
-# 函数计算中心点
 def calculate_center(points):
     x_coords = [p[0] for p in points]
     y_coords = [p[1] for p in points]
@@ -177,27 +169,22 @@ def calculate_center(points):
     center_y = np.mean(y_coords)
     return (center_x, center_y)
 
-# 函数计算长度（假设第一个和第二个点为长边）
 def calculate_length(points):
     p1, p2 = points[1], points[2]
     length = math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
     return length
 
-# 函数计算抓取方向与y轴的夹角
 def calculate_angle(points):
     p1, p2 = points[0], points[1]
     delta_x = p2[0] - p1[0]
     delta_y = p2[1] - p1[1]
     angle = math.atan2(delta_y, delta_x)
-    # 将角度转换为与y轴的夹角
     angle_with_y = angle - (math.pi / 2)
-    # 将角度转换为度数
     angle_with_y_degrees = math.degrees(angle_with_y)
     return angle_with_y_degrees
 
 
 def get_grasp(grasp_rects):
-    # 收集所有抓取表示
     grasp_representations = []
     for rect in grasp_rects:
         center = calculate_center(rect)
@@ -240,7 +227,7 @@ def gen_mat(label_file):
         endx = min(512, row+size+1)
         starty = max(0,col-size)
         endy = min(512, col+size+1)
-        label_mat[0,startx:endx,starty:endy] = 1  # 设置抓取点
+        label_mat[0,startx:endx,starty:endy] = 1
 
         label_mat[1, startx:endx, starty:endy] = 3. # class
         # label_mat[1, row, col] = 3.
@@ -254,10 +241,10 @@ def gen_mat(label_file):
             angle -= 3.14
 
 
-        label_mat[2,startx:endx,starty:endy] = angle  # 设置抓取点 #same pos with multi angle   not considered yet
+        label_mat[2,startx:endx,starty:endy] = angle
 
         # label_mat[2, row, col] = angle
-        label_mat[3,startx:endx,starty:endy] = float(label[-1])  # / 200.  # 设置抓取宽度
+        label_mat[3,startx:endx,starty:endy] = float(label[-1])
     # 0:position 1:label 2:angle 3:w
     #---------------vis------------------#
     # png_file = label_file.replace('.txt','.png')
@@ -312,8 +299,6 @@ def gen_mat(label_file):
 
 class GraspMat:
     """
-    语义分割mask类，本项目中用于affordance分割
-    抓取宽度: 原始宽度/200
     """
     def __init__(self, file, ins_mask_path, mode):
         #(4,640,480)
@@ -347,31 +332,25 @@ class GraspMat:
 
     @staticmethod
     def preprocess_image(img, target_size=(512, 512)):
-        c, h, w = img.shape  # 假设输入为 (通道, 高度, 宽度)
+        c, h, w = img.shape
         target_w, target_h = target_size
 
-        # 初始化处理后的图像数组
         processed_img = np.zeros((c, target_h, target_w), dtype=img.dtype)
 
         for i in range(c):
-            # 计算调整比例
             scale = min(target_w / w, target_h / h)
             new_w = int(w * scale)
             new_h = int(h * scale)
 
-            # 调整图像大小
             resized_img = cv2.resize(img[i], (new_w, new_h), interpolation=cv2.INTER_NEAREST)
 
-            # 计算填充
             delta_w = target_w - new_w
             delta_h = target_h - new_h
             top, bottom = delta_h // 2, delta_h - (delta_h // 2)
             left, right = delta_w // 2, delta_w - (delta_w // 2)
 
-            # 填充图像
             padded_img = cv2.copyMakeBorder(resized_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0)
 
-            # 将处理后的单通道图像放回多通道数组中
             processed_img[i] = padded_img
 
         return processed_img
@@ -384,7 +363,6 @@ class GraspMat:
 
     def crop(self, bbox):
         """
-        裁剪 self.grasp
 
         args:
             bbox: list(x1, y1, x2, y2)
@@ -400,17 +378,14 @@ class GraspMat:
         ])
         new_shape = self.grasp.shape[1]
         ratio = new_shape / ori_shape
-        # 抓取宽度同时缩放
         self.grasp[3, :, :] = self.grasp[3, :, :] * ratio
 
 
     def rotate(self, rota):
         """
-        rota: 角度
         """
         self.grasp = np.stack([imrotate(grasp, rota) for grasp in self.grasp])
         self.box_mask = np.stack([imrotate(box_mask, rota) for box_mask in self.box_mask])
-        # 角度旋转
         rota = rota / 180 * np.pi
         self.grasp[2, :, :] -= rota
         self.grasp[2, :, :] = self.grasp[2, :, :] % (np.pi * 2)
@@ -421,17 +396,11 @@ class GraspMat:
 
     def _flipAngle(self, angle_mat, confidence_mat):
         """
-        水平翻转angle
         Args:
-            angle_mat: (h, w) 弧度
-            confidence_mat: (h, w) 抓取置信度
         Returns:
         """
-        # 全部水平翻转
         angle_out = (angle_mat // math.pi) * 2 * math.pi + math.pi - angle_mat
-        # 将非抓取区域的抓取角置0
         angle_out = angle_out * confidence_mat
-        # 所有角度对2π求余
         angle_out = angle_out % (2 * math.pi)
 
         return angle_out
@@ -449,15 +418,12 @@ class GraspMat:
             for box_mask in self.box_mask
         ])
 
-        # 抓取角翻转，除了位置翻转，角度值也需要翻转
         self.grasp[2, :, :] = self._flipAngle(self.grasp[2, :, :], self.grasp[0, :, :])
 
     def _decode(self, mat, angle_cls):
         """
-        解析 grasp_mat
         Args:
             mat: np.ndarray (4, h, w)
-            angle_cls: 抓取角类别数，36/72/120
 
         Returns:
                 (1 + angle_cls + 1, h, w)  float
@@ -468,24 +434,24 @@ class GraspMat:
         grasp_angle = mat[2, :, :]
         grasp_width = mat[3, :, :]
 
-        angle_mat = np.zeros((angle_cls, h, w), dtype=np.float64)     # -1:不属于抓取点
+        angle_mat = np.zeros((angle_cls, h, w), dtype=np.float64)
         grasp_point = np.where(grasp_confidence > 0)
         for i, _ in enumerate(grasp_point[0]):
             row, col = grasp_point[0][i], grasp_point[1][i]
-            angle = grasp_angle[row, col]  # 弧度
+            angle = grasp_angle[row, col]
             mode = grasp_mode[row, col]
 
             angle_mat[-1, row, col] = 0.
 
-            if mode == 1.:  # 无约束抓取
+            if mode == 1.:
                 angle_mat[:, row, col] = 1.
-            elif mode == 2.:  # 单向抓取
-                angle1 = int(angle / (2 * np.pi) * angle_cls)  # 弧度转类别
+            elif mode == 2.:
+                angle1 = int(angle / (2 * np.pi) * angle_cls)
                 angle_mat[angle1, row, col] = 1.
-            elif mode == 3.:  # 对称抓取
-                angle1 = int(angle / (2 * np.pi) * angle_cls)  # 弧度转类别
+            elif mode == 3.:
+                angle1 = int(angle / (2 * np.pi) * angle_cls)
                 angle2 = angle + np.pi - int((angle + np.pi) // (2 * np.pi)) * 2 * np.pi
-                angle2 = int(angle2 / (2 * np.pi) * angle_cls)  # 弧度转类别
+                angle2 = int(angle2 / (2 * np.pi) * angle_cls)
                 angle_mat[angle1, row, col] = 1.
                 angle_mat[angle2, row, col] = 1.
             else:

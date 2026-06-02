@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 @Time ： 2020/3/31 19:38
-@Auth ： 王德鑫
 @File ：saver.py
 @IDE ：PyCharm
-@Function: 用于保存 summary model 预测图
 """
 import os
 import cv2
@@ -18,15 +16,14 @@ from torchsummary import summary
 
 class Saver:
     def __init__(self, path, logdir, modeldir, imgdir, net_desc):
-        self.path = path            # 保存路径
-        self.logdir = logdir        # tensorboard 文件夹
-        self.modeldir = modeldir    # model 文件夹
-        self.imgdir = imgdir        # img 文件夹
+        self.path = path
+        self.logdir = logdir
+        self.modeldir = modeldir
+        self.imgdir = imgdir
         self.net_desc = net_desc
 
     def save_summary(self):
         """
-        保存tensorboard
         :return:
         """
         save_folder = os.path.join(self.path, self.logdir, self.net_desc)
@@ -36,22 +33,17 @@ class Saver:
 
     def save_arch(self, net, shape):
         """
-        保存网络结构至 self.path/arch.txt
-        :param net: 网络
-        :param shape:一次前向传播的数据size
         :return:
         """
         f = open(os.path.join(self.path, 'arch.txt'), 'w')
         sys.stdout = f
-        summary(net, shape)  # 将网络结构信息保存至arch.txt
+        summary(net, shape)
         sys.stdout = sys.__stdout__
         f.close()
 
     def save_model(self, net, model_name):
         """
-        保存模型
         :param net:
-        :param model_name: 模型名
         :return:
         """
         model_path = os.path.join(self.path, self.modeldir, self.net_desc)
@@ -61,9 +53,7 @@ class Saver:
 
     def remove_model(self, num):
         """
-        删除多余的模型
         """
-        # 查询已保存的模型
         model_path = os.path.join(self.path, self.modeldir, self.net_desc)
         models = glob.glob(model_path + '/*_')
         models.sort()
@@ -73,7 +63,6 @@ class Saver:
 
     def save_img(self, epoch, idx, imgs):
         """
-        保存中间预测图
         :return:
         """
         able_out_1_255 = imgs[1].copy() * (255 / imgs[1].max())
